@@ -242,13 +242,20 @@ The Flatline mod supports using in-game console commands to change the mod event
 
 ## Save Data
 
-The Flatline mod will save mod related data into one of the following folders based on the mod version:
+The Flatline mod will save mod related data into one of the following folders based on the install type (manual or mod manager) and mod version:
 
-`UserData/XO_WithSauce-Flatline_MONO/PlayerData/(name).json`
+Thunderstore Mod Manager:
+
+`UserData/XO_WithSauce-Flatline_MONO/XO_WithSauce-Flatline/PlayerData/(name).json`
 
 OR 
 
-`UserData/XO_WithSauce-Flatline_IL2CPP/PlayerData/(name).json`
+`UserData/XO_WithSauce-Flatline_IL2CPP/XO_WithSauce-Flatline/PlayerData/(name).json`
+
+Manual installs (MONO and IL2CPP use the same):
+
+`UserData/XO_WithSauce-Flatline/PlayerData/(name).json`
+
 
 The save data .json file is named for example "2_factory.json" if your save file slot is 2 and save name is Factory
 
@@ -258,17 +265,23 @@ The save data consists of the players current state, the active diseases states,
 
 The Flatline mod will load mod related images and audios from one of the following folders based on mod version:
 
-`UserData/XO_WithSauce-Flatline_MONO/ModResources`
+Thunderstore Mod Manager:
 
-OR
+`UserData/XO_WithSauce-Flatline_MONO/XO_WithSauce-Flatline/ModResources`
 
-`UserData/XO_WithSauce-Flatline_IL2CPP/ModResources`
+OR 
+
+`UserData/XO_WithSauce-Flatline_IL2CPP/XO_WithSauce-Flatline/ModResources`
+
+Manual installs (MONO and IL2CPP use the same):
+
+`UserData/XO_WithSauce-Flatline/ModResources`
 
 The Mod Resources directory contains 2 folders, one for audios and one for images. 
 
 Audios are from Pixabay and the audio creators are credited accordingly in the metadata with links to their pages.
 
-Images are custom made.
+Images are customized and edited from icons downloaded from Flaticon and Icons8. See `ModResources/Images/CREDITS.txt` for full legal disclaimer, license usage and creator credits.
 
 
 The mod comes with an [audio loader (on GitHub)](https://github.com/XOWithSauce/schedule-flatline/blob/main/Source/Config/AudioLoader.cs) which is a stripped copy of the [deadlyfingers UnityWav project on GitHub](https://github.com/deadlyfingers/UnityWav)

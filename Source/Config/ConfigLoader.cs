@@ -129,18 +129,31 @@ namespace Flatline
     #region Mod resources loader
     public static class ConfigLoader
     {
+        // Folder where all images and audios folder always reside in
+        private readonly static string BASE_USERDATA_NAME = "XO_WithSauce-Flatline";
+
+        // For when user uses thunderstore mod manager it creates the following name for the folder where it puts the folders, depends on backend version
         private readonly static string TS_PACKAGE_NAME = "XO_WithSauce-Flatline_";
 #if MONO
-        private readonly static string packagePathUserData = Path.Combine(MelonEnvironment.UserDataDirectory, TS_PACKAGE_NAME + "MONO");
+        private readonly static string packagePathUserData = Path.Combine(MelonEnvironment.UserDataDirectory, TS_PACKAGE_NAME + "MONO", BASE_USERDATA_NAME);
 #else
-        private readonly static string packagePathUserData = Path.Combine(MelonEnvironment.UserDataDirectory, TS_PACKAGE_NAME + "IL2CPP");
+        private readonly static string packagePathUserData = Path.Combine(MelonEnvironment.UserDataDirectory, TS_PACKAGE_NAME + "IL2CPP", BASE_USERDATA_NAME);
 #endif
 
-        private readonly static string pathPlayerData = Path.Combine(packagePathUserData, "PlayerData"); // filename "{save slot number}_{save file organistaion name}"
+        // For when user drags and drops the UserData folder from manual download, this is fallback checked path for the mod userdata folder
+        private readonly static string manualPathUserData = Path.Combine(MelonEnvironment.UserDataDirectory, BASE_USERDATA_NAME);
 
-        // Images:
-        private readonly static string pathModImageResources = Path.Combine(packagePathUserData, "ModResources", "Images"); // filename images
-        private readonly static string pathModAudioResources = Path.Combine(packagePathUserData, "ModResources", "Audio"); // filename images
+
+        // Thunderstore Mod manager final paths
+        private readonly static string pathPlayerData = Path.Combine(packagePathUserData, "PlayerData"); // filename "{save slot number}_{save file organistaion name}"
+        private readonly static string pathModImageResources = Path.Combine(packagePathUserData, "ModResources", "Images");
+        private readonly static string pathModAudioResources = Path.Combine(packagePathUserData, "ModResources", "Audio");
+
+        // Manual drag and drop final paths
+        private readonly static string pathManualPlayerData = Path.Combine(manualPathUserData, "PlayerData"); // filename "{save slot number}_{save file organistaion name}"
+        private readonly static string pathManualModImageResources = Path.Combine(manualPathUserData, "ModResources", "Images");
+        private readonly static string pathManualModAudioResources = Path.Combine(manualPathUserData, "ModResources", "Audio");
+
 
         public readonly static List<string> imageResources = new() //.png
         {
@@ -182,11 +195,30 @@ namespace Flatline
             string orgName = LoadManager.Instance.ActiveSaveInfo.OrganisationName;
             int slotNumber = LoadManager.Instance.ActiveSaveInfo.SaveSlotNumber;
             string fileName = $"{slotNumber}_{SanitizeAndFormatName(orgName)}";
-            if (File.Exists(Path.Combine(pathPlayerData, fileName)))
+
+            string playerDataPath = "";
+            if (Directory.Exists(pathPlayerData))
+            {
+                // User has installed mod through mod manager and teamname_packagename folder exists for it
+                playerDataPath = pathPlayerData;
+            }
+            else if (Directory.Exists(pathManualPlayerData))
+            {
+                // User has drag and dropped the UserData folder
+                playerDataPath = pathManualPlayerData;
+            }
+            else
+            {
+                // Somehow both dont exist at all
+                MelonLogger.Error("Failed to locate Flatline PlayerData from the UserData folder!");
+                return null;
+            }
+
+            if (File.Exists(Path.Combine(playerDataPath, fileName)))
             {
                 try
                 {
-                    string json = File.ReadAllText(Path.Combine(pathPlayerData, fileName));
+                    string json = File.ReadAllText(Path.Combine(playerDataPath, fileName));
                     playerData = JsonConvert.DeserializeObject<FlatlinePlayerData>(json);
                 }
                 catch (Exception ex)
@@ -208,21 +240,39 @@ namespace Flatline
             lock (playerDataLock)
             {
                 FlatlinePlayerData currentData = new(playerData);
-            }
 
-            try
-            {
-                string orgName = LoadManager.Instance.ActiveSaveInfo.OrganisationName;
-                int slotNumber = LoadManager.Instance.ActiveSaveInfo.SaveSlotNumber;
-                string fileName = $"{slotNumber}_{SanitizeAndFormatName(orgName)}";
-                string saveDestination = Path.Combine(pathPlayerData, fileName);
-                string json = JsonConvert.SerializeObject(playerData, Formatting.Indented);
-                Directory.CreateDirectory(Path.GetDirectoryName(saveDestination));
-                File.WriteAllText(saveDestination, json);
-            }
-            catch (Exception ex)
-            {
-                MelonLogger.Warning("Failed to save Flatline player data: " + ex);
+                try
+                {
+                    string orgName = LoadManager.Instance.ActiveSaveInfo.OrganisationName;
+                    int slotNumber = LoadManager.Instance.ActiveSaveInfo.SaveSlotNumber;
+                    string fileName = $"{slotNumber}_{SanitizeAndFormatName(orgName)}";
+
+                    string playerDataPath = "";
+                    if (Directory.Exists(pathPlayerData))
+                    {
+                        // User has installed mod through mod manager and teamname_packagename folder exists for it
+                        playerDataPath = pathPlayerData;
+                    }
+                    else if (Directory.Exists(pathManualPlayerData))
+                    {
+                        // User has drag and dropped the UserData folder
+                        playerDataPath = pathManualPlayerData;
+                    }
+                    else
+                    {
+                        // Somehow both dont exist at all saving will prefer the first option that uses the TS package auto formatting
+                        playerDataPath = pathPlayerData;
+                    }
+
+                    string saveDestination = Path.Combine(playerDataPath, fileName);
+                    string json = JsonConvert.SerializeObject(currentData, Formatting.Indented);
+                    Directory.CreateDirectory(Path.GetDirectoryName(saveDestination));
+                    File.WriteAllText(saveDestination, json);
+                }
+                catch (Exception ex)
+                {
+                    MelonLogger.Warning("Failed to save Flatline player data: " + ex);
+                }
             }
 
             return;
@@ -231,11 +281,31 @@ namespace Flatline
         public static void RemoveSaveAssociatedData(string orgName, int slotNum)
         {
             string fileName = $"{slotNum}_{SanitizeAndFormatName(orgName)}";
-            if (File.Exists(Path.Combine(pathPlayerData, fileName)))
+
+            string playerDataPath = "";
+
+            if (Directory.Exists(pathPlayerData))
+            {
+                // User has installed mod through mod manager and teamname_packagename folder exists for it
+                playerDataPath = pathPlayerData;
+            }
+            else if (Directory.Exists(pathManualPlayerData))
+            {
+                // User has drag and dropped the UserData folder
+                playerDataPath = pathManualPlayerData;
+            }
+            else
+            {
+                // Somehow both dont exist at all
+                MelonLogger.Error("Failed to locate Flatline PlayerData from the UserData folder!");
+                return;
+            }
+
+            if (File.Exists(Path.Combine(playerDataPath, fileName)))
             {
                 try
                 {
-                    File.Delete(Path.Combine(pathPlayerData, fileName));
+                    File.Delete(Path.Combine(playerDataPath, fileName));
                 }
                 catch (Exception ex)
                 {
@@ -249,11 +319,33 @@ namespace Flatline
         #region Image loader, Audio loader
         public static void LoadModResources()
         {
-            if (Directory.Exists(pathModImageResources))
+            string imageResourcesPath = "";
+            string audioResourcesPath = "";
+
+            if (Directory.Exists(packagePathUserData))
+            {
+                // User has installed mod through mod manager and teamname_packagename folder exists for it
+                imageResourcesPath = pathModImageResources;
+                audioResourcesPath = pathModAudioResources;
+            }
+            else if (Directory.Exists(manualPathUserData))
+            {
+                // User has drag and dropped the UserData folder
+                imageResourcesPath = pathManualModImageResources;
+                audioResourcesPath = pathManualModAudioResources;
+            }
+            else
+            {
+                // Somehow both dont exist at all
+                MelonLogger.Error("Failed to locate Flatline mod resources from UserData!");
+                return;
+            }
+
+            if (Directory.Exists(imageResourcesPath))
             {
                 foreach (string imageName in imageResources)
                 {
-                    string imagePath = Path.Combine(pathModImageResources, imageName + ".png");
+                    string imagePath = Path.Combine(imageResourcesPath, imageName + ".png");
                     // if image file exists load into bytearray convert to texture and make a sprite
                     if (File.Exists(imagePath))
                     {
@@ -280,14 +372,14 @@ namespace Flatline
             }
             else
             {
-                MelonLogger.Error($"Flatline mod expected to find directory '{pathModImageResources}' but it's missing!");
+                MelonLogger.Error($"Flatline mod expected to find directory '{imageResourcesPath}' but it's missing!");
             }
 
-            if (Directory.Exists(pathModAudioResources))
+            if (Directory.Exists(audioResourcesPath))
             {
                 foreach (string audioName in audioResources)
                 {
-                    string audioPath = Path.Combine(pathModAudioResources, audioName + ".wav");
+                    string audioPath = Path.Combine(audioResourcesPath, audioName + ".wav");
                     // if image file exists load into bytearray convert to audio clip
                     if (File.Exists(audioPath))
                     {
@@ -306,8 +398,9 @@ namespace Flatline
             }
             else
             {
-                MelonLogger.Error($"Flatline mod expected to find directory '{pathModAudioResources}' but it's missing!");
+                MelonLogger.Error($"Flatline mod expected to find directory '{audioResourcesPath}' but it's missing!");
             }
+
             return;
         }
 #endregion
