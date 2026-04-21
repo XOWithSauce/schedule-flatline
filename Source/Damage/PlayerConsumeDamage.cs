@@ -14,6 +14,7 @@ using static Flatline.ConfigLoader;
 
 #if MONO
 using ScheduleOne;
+using ScheduleOne.Core;
 using ScheduleOne.DevUtilities;
 using ScheduleOne.FX;
 using ScheduleOne.ItemFramework;
@@ -24,6 +25,7 @@ using ScheduleOne.GameTime;
 #else
 using MelonLoader.Support;
 using Il2CppScheduleOne;
+using Il2CppScheduleOne.Core;
 using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.FX;
 using Il2CppScheduleOne.ItemFramework;
@@ -133,6 +135,8 @@ namespace Flatline
 
         public static void OnProductConsumed(EConsumeType type, EQuality quality = EQuality.Trash, bool useQuality = false)
         {
+            if (!currentConfig.DrugSideEffects) return;
+
             if (type == EConsumeType.None)
             {
                 return;
@@ -229,18 +233,18 @@ namespace Flatline
             {
                 Player.Local.Avatar.Effects.TriggerSick(false);
                 if (loadedPlayerData.State.Hunger > 0.1f)
-                    loadedPlayerData.State.Hunger = Mathf.Clamp01(loadedPlayerData.State.Hunger * 0.95f);
+                    SetFood(Mathf.Clamp01(loadedPlayerData.State.Hunger * 0.95f));
 
                 if (loadedPlayerData.State.Thirst > 0.1f)
-                    loadedPlayerData.State.Thirst = Mathf.Clamp01(loadedPlayerData.State.Thirst * 0.92f);
+                    SetWater(Mathf.Clamp01(loadedPlayerData.State.Thirst * 0.92f));
             }
             else if (type == EConsumeType.Weed && quality >= EQuality.Standard && UnityEngine.Random.Range(0f, 1f) > 0.20f)
             {
                 if (loadedPlayerData.State.Hunger > 0.1f)
-                    loadedPlayerData.State.Hunger = Mathf.Clamp01(loadedPlayerData.State.Hunger * 0.75f);
+                    SetFood(Mathf.Clamp01(loadedPlayerData.State.Hunger * 0.75f));
 
                 if (loadedPlayerData.State.Thirst > 0.1f)
-                    loadedPlayerData.State.Thirst = Mathf.Clamp01(loadedPlayerData.State.Thirst * 0.75f);
+                    SetWater(Mathf.Clamp01(loadedPlayerData.State.Thirst * 0.75f));
             }
 
             CalculateDepressionAfterConsumeProbability(type, quality);
@@ -318,8 +322,6 @@ namespace Flatline
             }
 
         }
-
-
 
         public static float DecayHalfLife(float current, int lifeTimeHrs)
         {
@@ -436,8 +438,8 @@ namespace Flatline
                     if (currentSystematicAmount > 0.75f && UnityEngine.Random.Range(0f, 1f) > 0.98f)
                     {
                         Player.Local.Avatar.Effects.TriggerSick(false);
-                        loadedPlayerData.State.Hunger = Mathf.Clamp01(loadedPlayerData.State.Hunger - 0.05f);
-                        loadedPlayerData.State.Thirst = Mathf.Clamp01(loadedPlayerData.State.Thirst - 0.02f);
+                        SetFood(Mathf.Clamp01(loadedPlayerData.State.Hunger - 0.05f));
+                        SetWater(Mathf.Clamp01(loadedPlayerData.State.Thirst - 0.02f));
                     }
 
                     targetAmp = Mathf.Lerp(amplitudeMin, amplitudeMax, currentSystematicAmount);
@@ -569,8 +571,8 @@ namespace Flatline
                 if (stimulantAmount > 0.75f && UnityEngine.Random.Range(0f, 1f) > 0.98f)
                 {
                     Player.Local.Avatar.Effects.TriggerSick(false);
-                    loadedPlayerData.State.Hunger = Mathf.Clamp01(loadedPlayerData.State.Hunger - 0.05f);
-                    loadedPlayerData.State.Thirst = Mathf.Clamp01(loadedPlayerData.State.Thirst - 0.02f);
+                    SetFood(Mathf.Clamp01(loadedPlayerData.State.Hunger - 0.05f));
+                    SetWater(Mathf.Clamp01(loadedPlayerData.State.Thirst - 0.02f));
                 }
 
 
@@ -650,7 +652,7 @@ namespace Flatline
 
             bool CanContinue(ConsumptionData data)
             {
-                return PlayerSingleton<PlayerCamera>.Instance.HeartbeatSoundController.sound.AudioSource.volume == 0f
+                return PlayerSingleton<PlayerCamera>.Instance.HeartbeatSoundController._sound._audioSource.volume == 0f
                     && Mathf.Clamp01(data.currentAmountInSystem) > 0.55f
                     && !(isQueuedForDeath || isPassedOut) 
                     && ProductEffectRunning;
@@ -721,6 +723,8 @@ namespace Flatline
         public static bool Prefix(ShroomInstance __instance, ref Il2CppSystem.Collections.IEnumerator __result, PsychedelicFullScreenFeature.MaterialProperties targetMaterialProperties, float targetValuePercentage, float duration)
 #endif
         {
+            if (!currentConfig.DrugSideEffects) return true;
+
             if (targetValuePercentage > 0f)
             {
 #if MONO

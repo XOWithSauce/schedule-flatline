@@ -12,6 +12,7 @@ using static Flatline.ConfigLoader;
 using static Flatline.PropertyTemperatureController;
 using static Flatline.DebugModule;
 
+
 #if MONO
 using ScheduleOne.Audio;
 using ScheduleOne.DevUtilities;
@@ -24,6 +25,7 @@ using ScheduleOne.Equipping;
 using ScheduleOne.ItemFramework;
 using ScheduleOne.FX;
 using ScheduleOne.UI;
+using ScheduleOne.Weather;
 using ScheduleOne;
 using ScheduleOne.Money;
 using ScheduleOne.Map;
@@ -41,6 +43,7 @@ using Il2CppScheduleOne.Equipping;
 using Il2CppScheduleOne.ItemFramework;
 using Il2CppScheduleOne.FX;
 using Il2CppScheduleOne.UI;
+using Il2CppScheduleOne.Weather;
 using Il2CppScheduleOne;
 using Il2CppScheduleOne.Money;
 using Il2CppScheduleOne.Map;
@@ -54,20 +57,20 @@ namespace Flatline
     {
         public static readonly float SystematicHomeostasisSpeed = 1f / ((60f * 24f) / 2f);
 
-        public static readonly float DefaultThirstConsumption = 0.00087958f;
+        public static float DefaultThirstConsumption = 0.00087958f;
         public static float ThirstConsumptionPerMinute = DefaultThirstConsumption;
 
-        public static readonly float DefaultFoodConsumption = 0.0015f;
+        public static float DefaultFoodConsumption = 0.0015f;
         public static float FoodConsumptionPerMinute = DefaultFoodConsumption;
 
-        public static readonly float DefaultEnergyConsumption = 0.0007f;
+        public static float DefaultEnergyConsumption = 0.0007f;
         public static float EnergyConsumptionPerMinute = DefaultEnergyConsumption;
         public static readonly float PunchEnergyConsumption = 0.001f;
         public static readonly float JumpEnergyConsumption = 0.0032f;
 
-        public static readonly float ParasympatheticActiveTempDecreasePerMinute = 0.00085f;
-        public static readonly float TemperatureConsumptionPerMinutePerDegreeDiff = 0.00055f;
-        public static readonly float TemperatureIncreasePerMinuteInside = 0.0025f;
+        public static readonly float ParasympatheticActiveTempDecreasePerMinute = 0.00035f;
+        public static float TemperatureConsumptionPerMinutePerDegreeDiff = 0.00022f;
+        public static readonly float TemperatureIncreasePerMinuteInside = 0.0035f;
         public static float TemperatureConsumption = TemperatureConsumptionPerMinutePerDegreeDiff;
 
         public static readonly float DefaultHealthRegeneration = 0.0006944f;
@@ -112,13 +115,14 @@ namespace Flatline
         public static float dayTempTarget = 20f;
         public static float nightTempTarget = 5f;
         public static readonly float maxOutTempCelsius = 23f;
-        public static readonly float minOutTempCelsius = 1f;
+        public static readonly float minOutTempCelsius = -1f;
 
         public static float playerClothingAmount = 0.33f;
         #endregion
 
         public static int minsInsideProperty = 0;
         public static int minsOutsideProperty = 0;
+        public static int minsWithSunnyWeather = 0;
 
         public static bool insideWarmBuilding = false;
 
@@ -144,13 +148,31 @@ namespace Flatline
             audioObject.SetActive(true);
             flatlinePlayerAudio.enabled = true;
 
-            OutsideTemperatureCelsius = Mathf.Lerp(5f, 20f, Mathf.Sin(TimeManager.Instance.NormalizedTimeOfDay * 2f * Mathf.PI - (Mathf.PI / 2f)));
-            Log("Set init outside temp to: " + OutsideTemperatureCelsius);
+            if (currentConfig.WorldTemperatureChanges)
+            {
+                float sineTemp = Mathf.Lerp(2f, 20f, Mathf.Sin(TimeManager.Instance.NormalizedTimeOfDay * 2f * Mathf.PI - (Mathf.PI / 2f)));
+                OutsideTemperatureCelsius = Mathf.MoveTowards(sineTemp, GetWeatherAdjustedWorldTemp(sineTemp, currentMin: 5f, currentMax: 17f), 2.5f);
+            }
+            else
+            {
+                OutsideTemperatureCelsius = 20f;
+            }
+
+            if (WorldTemperature != null)
+            {
+                string sign = currentConfig.FahrenheitTemp ? fahrenheitSign : celsiusSign;
+                int temp = currentConfig.FahrenheitTemp ?
+                    Mathf.RoundToInt(CelsiusToFahrenheit((float)OutsideTemperatureCelsius))
+                    : Mathf.RoundToInt(OutsideTemperatureCelsius);
+                WorldTemperature.text = $"{temp}{sign}";
+            }
 
             // add listener to update sfx volumes
-            Singleton<AudioManager>.Instance.onSettingsChanged.AddListener((UnityEngine.Events.UnityAction)OnAudioSettingsChanged);
-
-
+#if MONO
+            Singleton<AudioManager>.Instance.onVolumeSettingsChanged = (Action)Delegate.Combine(Singleton<AudioManager>.Instance.onVolumeSettingsChanged, new Action(OnAudioSettingsChanged));
+#else
+            Singleton<AudioManager>.Instance.onVolumeSettingsChanged += (Il2CppSystem.Action)OnAudioSettingsChanged;
+#endif
             Log("Finished init player");
         }
 
@@ -177,11 +199,12 @@ namespace Flatline
 
             stateChanged = false;
 
-            OutsideTemperatureCelsius = 15f;
+            OutsideTemperatureCelsius = 20f;
             playerClothingAmount = 0.33f;
 
             minsInsideProperty = 0;
             minsOutsideProperty = 0;
+            minsWithSunnyWeather = 0;
             flatlinePlayerAudio = null;
 
             insideWarmBuilding = false;
@@ -229,7 +252,7 @@ namespace Flatline
 
             bool hasSetRagdolled = false;
 
-            float moveSpeed = PlayerSingleton<PlayerMovement>.Instance.MoveSpeedMultiplier;
+            float moveSpeed = PlayerMovement.StaticMoveSpeedMultiplier;
 
             flatlinePlayerAudio.PlayOneShot(loadedAudios["flatline"]);
 
@@ -239,7 +262,7 @@ namespace Flatline
                 current += Time.deltaTime;
                 t = current / duration;
                 Singleton<PostProcessingManager>.Instance.SetBlur(t);
-                PlayerSingleton<PlayerMovement>.Instance.MoveSpeedMultiplier = Mathf.Lerp(moveSpeed, 0f, t);
+                PlayerMovement.StaticMoveSpeedMultiplier = Mathf.Lerp(moveSpeed, 0f, t);
                 Singleton<EyelidOverlay>.Instance.CurrentOpen = Mathf.Lerp(1f, 0f, t);
                 if (!hasSetRagdolled && t > 0.1f && !(isFPRagdollActive || Player.Local.IsRagdolled))
                 {
@@ -278,10 +301,10 @@ namespace Flatline
                 yield return Wait2;
                 if (!registered) yield break;
 
-                loadedPlayerData.State.Thirst = 0.99f;
-                loadedPlayerData.State.Hunger = 0.99f;
-                loadedPlayerData.State.Temperature = 0.99f;
-                loadedPlayerData.State.Energy = 0.99f;
+                SetWater(0.99f);
+                SetFood(0.99f);
+                SetTemperature(0.99f);
+                SetEnergy(0.99f);
                 loadedPlayerData.State.healthData.MaxHP = 100f;
                 loadedPlayerData.State.healthData.CurrentHP = 99f;
 
@@ -300,7 +323,7 @@ namespace Flatline
                 Singleton<EyelidOverlay>.Instance.CurrentOpen = 1f;
                 Singleton<EyelidOverlay>.Instance.AutoUpdate = true;
                 Singleton<PostProcessingManager>.Instance.SetBlur(0f);
-                PlayerSingleton<PlayerMovement>.Instance.MoveSpeedMultiplier = moveSpeed;
+                PlayerMovement.StaticMoveSpeedMultiplier = moveSpeed;
                 if (hasSetRagdolled)
                 {
                     PlayerSingleton<PlayerInventory>.Instance.SetInventoryEnabled(true);
@@ -361,7 +384,7 @@ namespace Flatline
                 return shouldWakeNow;
             }
 
-            float moveSpeed = PlayerSingleton<PlayerMovement>.Instance.MoveSpeedMultiplier;
+            float moveSpeed = PlayerMovement.StaticMoveSpeedMultiplier;
 
             float t = 0f;
             while (current < duration)
@@ -370,7 +393,7 @@ namespace Flatline
                 current += Time.deltaTime;
                 t = current / duration;
                 Singleton<PostProcessingManager>.Instance.SetBlur(t);
-                PlayerSingleton<PlayerMovement>.Instance.MoveSpeedMultiplier = Mathf.Lerp(1f, 0f, t);
+                PlayerMovement.StaticMoveSpeedMultiplier = Mathf.Lerp(1f, 0f, t);
                 if (t > 0.375f)
                 {
                     Singleton<EyelidOverlay>.Instance.CurrentOpen = Mathf.Lerp(1f, 0f, t);
@@ -448,7 +471,7 @@ namespace Flatline
             Singleton<EyelidOverlay>.Instance.CurrentOpen = 1f;
             Singleton<EyelidOverlay>.Instance.AutoUpdate = true;
             Singleton<PostProcessingManager>.Instance.SetBlur(0f);
-            PlayerSingleton<PlayerMovement>.Instance.MoveSpeedMultiplier = moveSpeed;
+            PlayerMovement.StaticMoveSpeedMultiplier = moveSpeed;
             PlayerSingleton<PlayerInventory>.Instance.SetInventoryEnabled(true);
 
             Player.Local.IsUnconscious = false;
@@ -460,21 +483,34 @@ namespace Flatline
         {
             if (haltExecution) return;
 
-            loadedPlayerData.State.Energy = 1f;
+            SetEnergy(1f);
+            SetFood(loadedPlayerData.State.Hunger * 0.66f);
+            SetWater(loadedPlayerData.State.Thirst * 0.66f);
+            SetTemperature(loadedPlayerData.State.Temperature * 0.90f);
 
-            loadedPlayerData.State.Hunger *= 0.66f;
-
-            loadedPlayerData.State.Thirst *= 0.66f;
-
-            loadedPlayerData.State.Temperature *= 0.90f;
-
-
-            dayTempTarget = UnityEngine.Random.Range(16f, maxOutTempCelsius);
-            nightTempTarget = UnityEngine.Random.Range(minOutTempCelsius, 6f);
-            if (UnityEngine.Random.Range(0f, 1f) > 0.90f && OutsideTemperatureCelsius > 10f) // 1 out of 10 days is very cold in the morning
-                OutsideTemperatureCelsius = Mathf.Lerp(OutsideTemperatureCelsius, minOutTempCelsius, 0.75f);
-            else if (OutsideTemperatureCelsius > 10f)
-                OutsideTemperatureCelsius = Mathf.Lerp(OutsideTemperatureCelsius, minOutTempCelsius, 0.50f);
+            if (currentConfig.DiseasesEnabled && currentConfig.FeverEnabled)
+            {
+                bool hasFlu = false;
+                foreach (Disease activeDisease in allDiseases)
+                {
+                    if (activeDisease.GetType() == typeof(Fever) && activeDisease.data.Active)
+                    {
+                        hasFlu = true;
+                    }
+                }
+                if (!hasFlu)
+                    loadedPlayerData.State.healthData.daysSinceFlu++;
+                else
+                    loadedPlayerData.State.healthData.daysSinceFlu = 0;
+            }
+            
+            if (currentConfig.WorldTemperatureChanges)
+            {
+                dayTempTarget = UnityEngine.Random.Range(16f, maxOutTempCelsius);
+                nightTempTarget = UnityEngine.Random.Range(minOutTempCelsius, 6f);
+                float morningTemp = Mathf.Lerp(OutsideTemperatureCelsius, nightTempTarget, 0.66f);
+                OutsideTemperatureCelsius = GetWeatherAdjustedWorldTemp(morningTemp, nightTempTarget, nightTempTarget + 6f);
+            }
         }
 
         public static void OnMinPass()
@@ -486,22 +522,22 @@ namespace Flatline
             bool shouldParasympatheticSystemBeActive = loadedPlayerData.State.Hunger >= 0.90f;
 
             if (shouldParasympatheticSystemBeActive)
-                loadedPlayerData.State.Thirst = Mathf.Clamp01(loadedPlayerData.State.Thirst - ThirstConsumptionPerMinute * UnityEngine.Random.Range(1.05f, 1.15f));
+                SetWater(Mathf.Clamp01(loadedPlayerData.State.Thirst - ThirstConsumptionPerMinute * UnityEngine.Random.Range(1.05f, 1.15f)));
             else
-                loadedPlayerData.State.Thirst = Mathf.Clamp01(loadedPlayerData.State.Thirst - ThirstConsumptionPerMinute);
+                SetWater(Mathf.Clamp01(loadedPlayerData.State.Thirst - ThirstConsumptionPerMinute));
 
-            loadedPlayerData.State.Hunger = Mathf.Clamp01(loadedPlayerData.State.Hunger - FoodConsumptionPerMinute);
+            SetFood(Mathf.Clamp01(loadedPlayerData.State.Hunger - FoodConsumptionPerMinute));
 
             if (shouldParasympatheticSystemBeActive)
-                loadedPlayerData.State.Energy = Mathf.Clamp01(loadedPlayerData.State.Energy - EnergyConsumptionPerMinute * UnityEngine.Random.Range(0.55f, 0.7f));
+                SetEnergy(Mathf.Clamp01(loadedPlayerData.State.Energy - EnergyConsumptionPerMinute * UnityEngine.Random.Range(0.55f, 0.7f)));
             else
-                loadedPlayerData.State.Energy = Mathf.Clamp01(loadedPlayerData.State.Energy - EnergyConsumptionPerMinute);
+                SetEnergy(Mathf.Clamp01(loadedPlayerData.State.Energy - EnergyConsumptionPerMinute));
 
             Player.Local.Energy.CurrentEnergy = Mathf.Lerp(1f, 100f, loadedPlayerData.State.Energy);
 
-            if (!Mathf.Approximately(PlayerSingleton<PlayerMovement>.Instance.MoveSpeedMultiplier, loadedPlayerData.State.healthData.MoveSpeedScale))
+            if (!Mathf.Approximately(PlayerMovement.StaticMoveSpeedMultiplier, loadedPlayerData.State.healthData.MoveSpeedScale))
             {
-                PlayerSingleton<PlayerMovement>.Instance.MoveSpeedMultiplier = Mathf.Lerp(PlayerSingleton<PlayerMovement>.Instance.MoveSpeedMultiplier, loadedPlayerData.State.healthData.MoveSpeedScale, 0.15f);
+                PlayerMovement.StaticMoveSpeedMultiplier = Mathf.Lerp(PlayerMovement.StaticMoveSpeedMultiplier, loadedPlayerData.State.healthData.MoveSpeedScale, 0.15f);
             }
             
             if (Player.Local.Health.CurrentHealth > loadedPlayerData.State.healthData.MaxHP)
@@ -568,6 +604,10 @@ namespace Flatline
             else
                 minsOutsideProperty++;
 
+            WeatherConditions weather = NetworkSingleton<EnvironmentManager>.Instance.CurrentWeatherConditions;
+            if (weather.Sunny > 0.5f && weather.Cloudy <= 0.49f && weather.Rainy <= 0.25f && weather.Stormy <= 0.25f)
+                minsWithSunnyWeather++;
+
             float localPlayerAmbientTemp = 0f;
             if (inProperty)
                 localPlayerAmbientTemp = Player.Local.CurrentProperty.AmbientTemperature;
@@ -592,9 +632,6 @@ namespace Flatline
                 }
             }
 
-            if (TimeManager.Instance.CurrentTime % 10 == 0)
-                Log("Temperature in player area: " + localPlayerAmbientTemp);
-
             bool tempSheds = false;
             if (localPlayerAmbientTemp <= 17f)
             {
@@ -602,11 +639,11 @@ namespace Flatline
                 float tempDiff = 37f - localPlayerAmbientTemp;
                 float currentHeatShed = tempDiff * TemperatureConsumption;
                 currentHeatShed = Mathf.Lerp(currentHeatShed, TemperatureConsumptionPerMinutePerDegreeDiff, playerClothingAmount * 0.90f);
-                loadedPlayerData.State.Temperature = Mathf.Clamp01(loadedPlayerData.State.Temperature - currentHeatShed);
+                SetTemperature(Mathf.Clamp01(loadedPlayerData.State.Temperature - currentHeatShed));
             }
             else if (loadedPlayerData.State.Temperature < 0.9f && localPlayerAmbientTemp > 17f)
             {
-                loadedPlayerData.State.Temperature = Mathf.Clamp01(loadedPlayerData.State.Temperature + TemperatureIncreasePerMinuteInside * (1f + playerClothingAmount));
+                SetTemperature(Mathf.Clamp01(loadedPlayerData.State.Temperature + TemperatureIncreasePerMinuteInside * (1f + playerClothingAmount)));
             }
 
             if (shouldParasympatheticSystemBeActive)
@@ -614,13 +651,13 @@ namespace Flatline
                 bool isPlayerMoving = (PlayerSingleton<PlayerMovement>.Instance.Movement.x > 0.01f || PlayerSingleton<PlayerMovement>.Instance.Movement.z > 0.01f);
                 // Parasympathetic temperature decrease when full on food 
                 if (loadedPlayerData.State.Temperature > 0.25f && !tempSheds && isPlayerMoving)
-                    loadedPlayerData.State.Temperature -= ParasympatheticActiveTempDecreasePerMinute * 0.66f;
+                    SetTemperature(loadedPlayerData.State.Temperature - ParasympatheticActiveTempDecreasePerMinute * 0.66f);
                 else if (loadedPlayerData.State.Temperature > 0.25f && !tempSheds && !isPlayerMoving)
-                    loadedPlayerData.State.Temperature -= ParasympatheticActiveTempDecreasePerMinute * 0.88f;
+                    SetTemperature(loadedPlayerData.State.Temperature - ParasympatheticActiveTempDecreasePerMinute * 0.88f);
                 else if (loadedPlayerData.State.Temperature > 0.25f && tempSheds && isPlayerMoving)
-                    loadedPlayerData.State.Temperature -= ParasympatheticActiveTempDecreasePerMinute;
-                else if (loadedPlayerData.State.Temperature > 0.25f && tempSheds && !isPlayerMoving) 
-                    loadedPlayerData.State.Temperature -= ParasympatheticActiveTempDecreasePerMinute * 1.33f;
+                    SetTemperature(loadedPlayerData.State.Temperature - ParasympatheticActiveTempDecreasePerMinute);
+                else if (loadedPlayerData.State.Temperature > 0.25f && tempSheds && !isPlayerMoving)
+                    SetTemperature(loadedPlayerData.State.Temperature - ParasympatheticActiveTempDecreasePerMinute * 1.33f);
             }
 
             EvaluatePlayerStatus();
@@ -636,55 +673,65 @@ namespace Flatline
             if (NetworkSingleton<TimeManager>.Instance.CurrentTime < 659 && NetworkSingleton<TimeManager>.Instance.CurrentTime > 400) return;
             if (Player.PlayerList.Count > 1 && !Player.Local.Health.IsAlive) return;
 
-            float currentMin = minOutTempCelsius;
-            float currentMax = maxOutTempCelsius;
-
-            bool isDay = false;
-            if (NetworkSingleton<TimeManager>.Instance.CurrentTime >= 1600 || NetworkSingleton<TimeManager>.Instance.CurrentTime <= 700)
+            // Change world temp if config enabled, else 20c flat
+            if (currentConfig.WorldTemperatureChanges)
             {
-                bool pastNight = NetworkSingleton<TimeManager>.Instance.CurrentTime <= 400;
-                currentMax -= UnityEngine.Random.Range(1, 3);
-                if (NetworkSingleton<TimeManager>.Instance.CurrentTime >= 1700 || pastNight)
-                    currentMax -= UnityEngine.Random.Range(2, 4);
-                if (NetworkSingleton<TimeManager>.Instance.CurrentTime >= 1900 || pastNight)
-                    currentMax -= UnityEngine.Random.Range(2, 4);
-                if (NetworkSingleton<TimeManager>.Instance.CurrentTime >= 2100 || pastNight)
-                    currentMax -= 5;
-                Mathf.Clamp(currentMax, 10, maxOutTempCelsius);
+                float currentMin = minOutTempCelsius;
+                float currentMax = maxOutTempCelsius;
+
+                bool isDay = false;
+                if (NetworkSingleton<TimeManager>.Instance.CurrentTime >= 1600 || NetworkSingleton<TimeManager>.Instance.CurrentTime <= 700)
+                {
+                    bool pastNight = NetworkSingleton<TimeManager>.Instance.CurrentTime <= 400;
+                    currentMax -= UnityEngine.Random.Range(1, 3);
+                    if (NetworkSingleton<TimeManager>.Instance.CurrentTime >= 1700 || pastNight)
+                        currentMax -= UnityEngine.Random.Range(2, 4);
+                    if (NetworkSingleton<TimeManager>.Instance.CurrentTime >= 1900 || pastNight)
+                        currentMax -= UnityEngine.Random.Range(2, 4);
+                    if (NetworkSingleton<TimeManager>.Instance.CurrentTime >= 2100 || pastNight)
+                        currentMax -= 5;
+                    currentMax = Mathf.Clamp(currentMax, 8, maxOutTempCelsius);
+                }
+                else if (NetworkSingleton<TimeManager>.Instance.CurrentTime >= 700 && NetworkSingleton<TimeManager>.Instance.CurrentTime <= 1600)
+                {
+                    isDay = true;
+                    currentMin += UnityEngine.Random.Range(1, 4);
+                    if (NetworkSingleton<TimeManager>.Instance.CurrentTime >= 900)
+                        currentMin += UnityEngine.Random.Range(2, 4);
+                    if (NetworkSingleton<TimeManager>.Instance.CurrentTime >= 1100)
+                        currentMin += UnityEngine.Random.Range(3, 4);
+                    if (NetworkSingleton<TimeManager>.Instance.CurrentTime >= 1300)
+                        currentMin += 5;
+                    currentMin = Mathf.Clamp(currentMin, minOutTempCelsius, 15);
+                }
+
+                if (currentMin >= currentMax)
+                    currentMin = currentMax - 2;
+                else if (currentMax <= currentMin)
+                    currentMax = currentMin + 2;
+
+
+                float lerpSpeed = 0.15f;
+                // During sunrise, sunset lerp faster speed
+                if ((NetworkSingleton<TimeManager>.Instance.CurrentTime >= 659 && NetworkSingleton<TimeManager>.Instance.CurrentTime < 1200) || (NetworkSingleton<TimeManager>.Instance.CurrentTime >= 1700 && NetworkSingleton<TimeManager>.Instance.CurrentTime < 2100))
+                    lerpSpeed = 0.26f;
+
+                float hourTempTarget = Mathf.Lerp(OutsideTemperatureCelsius, UnityEngine.Random.Range(currentMin, currentMax), lerpSpeed / 3f);
+                float weatherAdjusted = GetWeatherAdjustedWorldTemp(hourTempTarget, currentMin, currentMax);
+                float dayTimeAdjusted = Mathf.Lerp(weatherAdjusted, isDay ? dayTempTarget : nightTempTarget, lerpSpeed / 1.66f);
+                float old = OutsideTemperatureCelsius;
+                OutsideTemperatureCelsius = Mathf.MoveTowards(old, dayTimeAdjusted, 2.5f);
             }
-            else if (NetworkSingleton<TimeManager>.Instance.CurrentTime >= 700 && NetworkSingleton<TimeManager>.Instance.CurrentTime <= 1600)
+            else
             {
-                isDay = true; 
-                currentMin += UnityEngine.Random.Range(1, 4); 
-                if (NetworkSingleton<TimeManager>.Instance.CurrentTime >= 900)
-                    currentMin += UnityEngine.Random.Range(2, 4);
-                if (NetworkSingleton<TimeManager>.Instance.CurrentTime >= 1100)
-                    currentMin += UnityEngine.Random.Range(3, 4);
-                if (NetworkSingleton<TimeManager>.Instance.CurrentTime >= 1300)
-                    currentMin += 5;
-                Mathf.Clamp(currentMin, minOutTempCelsius, 15);
+                OutsideTemperatureCelsius = 20f;
             }
 
-            if (currentMin >= currentMax)
-                currentMin = currentMax - 2;
-            else if (currentMax <= currentMin)
-                currentMax = currentMin + 2;
-
-
-            float lerpSpeed = 0.15f;
-            // During sunrise, sunset lerp faster speed
-            if ((NetworkSingleton<TimeManager>.Instance.CurrentTime >= 659 && NetworkSingleton<TimeManager>.Instance.CurrentTime < 1200) || (NetworkSingleton<TimeManager>.Instance.CurrentTime >= 1700 && NetworkSingleton<TimeManager>.Instance.CurrentTime < 2100))
-                lerpSpeed = 0.26f;
-
-            float hourTempTarget = Mathf.Lerp(OutsideTemperatureCelsius, UnityEngine.Random.Range(currentMin, currentMax), lerpSpeed / 3f);
-            float dayTimeAdjusted = Mathf.Lerp(hourTempTarget, isDay ? dayTempTarget : nightTempTarget, lerpSpeed / 1.66f);
-            OutsideTemperatureCelsius = dayTimeAdjusted;
-            Log($"HourPass change temp: {OutsideTemperatureCelsius} + Current clothes: {playerClothingAmount}");
             if (WorldTemperature != null)
             {
                 string sign = currentConfig.FahrenheitTemp ? fahrenheitSign : celsiusSign;
-                int temp = currentConfig.FahrenheitTemp ? 
-                    Mathf.RoundToInt(CelsiusToFahrenheit((float)OutsideTemperatureCelsius)) 
+                int temp = currentConfig.FahrenheitTemp ?
+                    Mathf.RoundToInt(CelsiusToFahrenheit((float)OutsideTemperatureCelsius))
                     : Mathf.RoundToInt(OutsideTemperatureCelsius);
                 WorldTemperature.text = $"{temp}{sign}";
             }
@@ -753,9 +800,9 @@ namespace Flatline
 
                 if (PlayerSingleton<PlayerMovement>.Instance.IsSprinting)
                 {
-                    loadedPlayerData.State.Energy = Mathf.Clamp01(loadedPlayerData.State.Energy - extraEnergyConsumptionWhileRunning);
+                    SetEnergy(Mathf.Clamp01(loadedPlayerData.State.Energy - extraEnergyConsumptionWhileRunning));
                     if (loadedPlayerData.State.Temperature < 0.8f)
-                        loadedPlayerData.State.Temperature = Mathf.Clamp01(loadedPlayerData.State.Temperature + extraTemperatureIncreaseWhileRunning);
+                        SetTemperature(Mathf.Clamp01(loadedPlayerData.State.Temperature + extraTemperatureIncreaseWhileRunning));
 
                     sprintReserveSeconds = Mathf.Clamp(sprintReserveSeconds-0.5f, 0f, MaxSprintReserveSeconds);
                     if (!isSprintExhausted && sprintReserveSeconds < 0.5f)
@@ -1030,15 +1077,6 @@ namespace Flatline
             Vector3 boxExtent = bc.size * 0.5f;
             return Mathf.Abs(posInBox.x) <= boxExtent.x && Mathf.Abs(posInBox.y) <= boxExtent.y && Mathf.Abs(posInBox.z) <= boxExtent.z;
         }
-
-        // Override for figuring out dark market presence
-        public static bool IsPointInsideBox(Vector3 playerPos, Transform boxTransform, Vector3 size)
-        {
-            Vector3 posInBox = boxTransform.transform.InverseTransformPoint(playerPos);
-            Vector3 boxExtent = size * 0.5f;
-            return Mathf.Abs(posInBox.x) <= boxExtent.x && Mathf.Abs(posInBox.y) <= boxExtent.y && Mathf.Abs(posInBox.z) <= boxExtent.z;
-        }
-
         public static IEnumerator LazyUpdatePlayerWarmBuilding()
         {
             for (; ; )
@@ -1047,48 +1085,85 @@ namespace Flatline
                 if (!registered) yield break;
                 if (isQueuedForDeath && currentConfig.PermanentDeath) yield break;
 
+                if (!currentConfig.TemperatureRequired) continue;
                 if (isPassedOut || NetworkSingleton<TimeManager>.Instance.IsSleepInProgress || haltExecution) continue;
 
-                float distNearest = 100f;
+                if (Player.Local.CurrentProperty != null || Player.Local.CurrentBusiness != null) continue;
 
+                bool inWeatherEclosure = false;
                 bool foundBuilding = false;
-                foreach (var kvp in warmBuildingsInRegion)
+
+                if (NetworkSingleton<EnvironmentManager>.Instance._weatherEnclosures != null)
                 {
-                    if (foundBuilding) break;
-                    foreach (BoxCollider bc in kvp.Value)
+#if MONO
+                    using (List<WeatherEnclosure>.Enumerator enumerator = NetworkSingleton<EnvironmentManager>.Instance._weatherEnclosures.GetEnumerator())
                     {
-                        float distToP = Vector3.Distance(Player.Local.CenterPointTransform.position, bc.transform.position);
-                        if (distToP < distNearest)
-                            distNearest = distToP;
-                        if (distToP < 5f || IsPointInsideBox(Player.Local.CenterPointTransform.position, bc))
+                        while(enumerator.MoveNext())
                         {
-                            insideWarmBuilding = true;
-                            string presence = distToP < 5f ? "near" : "";
-                            presence += IsPointInsideBox(Player.Local.CenterPointTransform.position, bc) ? "+in box" : "";
-                            Log($"Detected player presence in a warm building " + presence);
-                            foundBuilding = true;
-                            break;
+                            if (enumerator.Current.WithinEnclosure(Player.Local.CenterPointTransform.position, out float _))
+                            {
+                                inWeatherEclosure = true;
+                                break;
+                            }
+                        }
+                    }
+#else
+                    Il2CppSystem.Collections.Generic.List<WeatherEnclosure>.Enumerator enumerator = NetworkSingleton<EnvironmentManager>.Instance._weatherEnclosures.GetEnumerator();
+                    try
+                    {
+                        while (enumerator.MoveNext())
+                        {
+                            if (enumerator.Current.WithinEnclosure(Player.Local.CenterPointTransform.position, out float _))
+                            {
+                                inWeatherEclosure = true;
+                                break;
+                            }
+                        }
+                    }
+                    finally
+                    {
+                        enumerator.Dispose();
+                    }
+#endif
+                }
+
+                if (!inWeatherEclosure)
+                {
+                    // Check the 2 docks buildings under bridge that are not detectable by the WithinEnclosure function
+                    float distNearest = 100f;
+
+                    foreach (var kvp in warmBuildingsInRegion)
+                    {
+                        if (foundBuilding) break;
+                        foreach (BoxCollider bc in kvp.Value)
+                        {
+                            float distToP = Vector3.Distance(Player.Local.CenterPointTransform.position, bc.transform.position);
+                            if (distToP < distNearest)
+                                distNearest = distToP;
+                            if (distToP < 5f || IsPointInsideBox(Player.Local.CenterPointTransform.position, bc))
+                            {
+                                insideWarmBuilding = true;
+                                string presence = distToP < 5f ? "near" : "";
+                                presence += IsPointInsideBox(Player.Local.CenterPointTransform.position, bc) ? "+in box" : "";
+                                Log($"Detected player presence in a warm building " + presence);
+                                foundBuilding = true;
+                                break;
+                            }
                         }
                     }
                 }
-                if (foundBuilding) continue;
 
-                if (darkMarket == null)
+                if (!inWeatherEclosure && !foundBuilding)
                 {
-                    Log("Dark market tr is null");
+                    Log($"Player not inside a warm building in region ");
                     insideWarmBuilding = false;
-                    continue;
                 }
-                // Not continued or not in reg with colliders check dark market
-                if (IsPointInsideBox(Player.Local.CenterPointTransform.position, darkMarket, new Vector3(30f, 10f, 20f)))
+                else
                 {
+                    Log($"Detected player presence in a weather enclosure or warm building");
                     insideWarmBuilding = true;
-                    Log("Detected player presence in a warm building");
-                    continue;
                 }
-                Log($"Player not inside a warm building in region nearest {distNearest}");
-                // No checks passed cant be in a warm building
-                insideWarmBuilding = false;
+
             }
         }
 
@@ -1106,6 +1181,57 @@ namespace Flatline
                 PlayerConsumeDamage.heartBeatSource.volume = sfxScaledVolume;
         }
 
+        public static float GetWeatherAdjustedWorldTemp(float temp, float currentMin, float currentMax)
+        {
+            WeatherConditions weather = NetworkSingleton<EnvironmentManager>.Instance.CurrentWeatherConditions;
+            float total = weather.Sunny + weather.Cloudy + weather.Windy + weather.Foggy + weather.Rainy + weather.Stormy + weather.Sleet + weather.Hail + weather.Snowy;
+            float time = (float)NetworkSingleton<TimeManager>.Instance.CurrentTime;
+            float sunPower = (time > 600 && time < 1800) ? 1f : 0f;
+            float sunnyWeight = (weather.Sunny * sunPower) / total;
+            float moistureWeight = (weather.Foggy + weather.Rainy + weather.Stormy) / total;
+            float windCloudWeight = (weather.Cloudy + weather.Windy) / total;
+            float icyWeight = (weather.Snowy + weather.Sleet + weather.Hail) / total;
+            float weatherTemp = temp;
+            weatherTemp = Mathf.Lerp(weatherTemp, currentMax, sunnyWeight * (weather.Sunny * sunPower));
+            weatherTemp = Mathf.Lerp(weatherTemp, currentMin, moistureWeight * 0.25f);
+            weatherTemp = Mathf.Lerp(weatherTemp, currentMin, windCloudWeight * 0.33f);
+            weatherTemp = Mathf.Lerp(weatherTemp, currentMin, icyWeight * 0.53f);
+            return weatherTemp;
+        }
+
+        public static void SetWater(float val)
+        {
+            if (!currentConfig.WaterRequired)
+                return;
+            
+            loadedPlayerData.State.Thirst = val;
+            return;
+        }
+        public static void SetFood(float val)
+        {
+            if (!currentConfig.FoodRequired)
+                return;
+
+            loadedPlayerData.State.Hunger = val;
+
+            return;
+        }
+        public static void SetEnergy(float val)
+        {
+            if (!currentConfig.EnergyRequired)
+                return;
+
+            loadedPlayerData.State.Energy = val;
+            return;
+        }
+        public static void SetTemperature(float val)
+        {
+            if (!currentConfig.TemperatureRequired)
+                return;
+
+            loadedPlayerData.State.Temperature = val;
+            return;
+        }
     }
 
 

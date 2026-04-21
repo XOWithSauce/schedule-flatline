@@ -82,6 +82,7 @@ namespace Flatline
             this.Gluttony = original.Gluttony;
             this.TimesSmoked = original.TimesSmoked;
             this.IsLegBoneBroken = original.IsLegBoneBroken;
+            this.daysSinceFlu = original.daysSinceFlu;
         }
         public float MaxHP = 100f;
         public float CurrentHP = 100f;
@@ -90,7 +91,7 @@ namespace Flatline
         public float Gluttony = 0f; // based on the amount eaten on average, gluttony 0...1
         public int TimesSmoked = 0;
         public bool IsLegBoneBroken = false; // if BoneBreak not active always false, otherwise set to true on specific bone break disease
-
+        public int daysSinceFlu = 0;
     }
 
     [Serializable]
@@ -122,7 +123,27 @@ namespace Flatline
     public class FlatlineModConfig
     {
         public bool PermanentDeath = true;
+        public bool DrugSideEffects = true;
+        public bool PropertyTemperatureChanges = true;
+        public bool WorldTemperatureChanges = true;
         public bool FahrenheitTemp = false;
+
+        public bool DiseasesEnabled = true;
+        public bool BleedingEnabled = true;
+        public bool BoneBreakEnabled = true;
+        public bool CancerEnabled = true;
+        public bool DepressionEnabled = true;
+        public bool FeverEnabled = true;
+
+        public bool WaterRequired = true;
+        public bool FoodRequired = true;
+        public bool EnergyRequired = true;
+        public bool TemperatureRequired = true;
+
+        public float WaterConsumption = 0.00087958f;
+        public float FoodConsumption = 0.0015f;
+        public float EnergyConsumption = 0.0007f;
+        public float TemperatureConsumption = 0.00022f;
     }
     #endregion
 
@@ -321,7 +342,6 @@ namespace Flatline
         {
             string imageResourcesPath = "";
             string audioResourcesPath = "";
-
             if (Directory.Exists(packagePathUserData))
             {
                 // User has installed mod through mod manager and teamname_packagename folder exists for it

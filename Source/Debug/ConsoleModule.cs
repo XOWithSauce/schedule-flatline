@@ -122,22 +122,22 @@ namespace Flatline
                     case "thirst":
                         if (type != typeof(float)) 
                             throw new MemberTypeException("Invalid member value type for thirst");
-                        loadedPlayerData.State.Thirst = Mathf.Clamp01(fVal);
+                        SetWater(Mathf.Clamp01(fVal));
                         break;
                     case "hunger":
                         if (type != typeof(float))
                             throw new MemberTypeException("Invalid member value type for hunger");
-                        loadedPlayerData.State.Hunger =  Mathf.Clamp01(fVal);
+                        SetFood(Mathf.Clamp01(fVal));
                         break;
                     case "energy":
                         if (type != typeof(float))
                             throw new MemberTypeException("Invalid member value type for energy");
-                        loadedPlayerData.State.Energy = Mathf.Clamp01(fVal);
+                        SetEnergy(Mathf.Clamp01(fVal));
                         break;
                     case "temperature":
                         if (type != typeof(float))
                             throw new MemberTypeException("Invalid member value type for temperature");
-                        loadedPlayerData.State.Temperature = Mathf.Clamp01(fVal);
+                        SetTemperature(Mathf.Clamp01(fVal));
                         break;
                     case "maxhp":
                         if (type != typeof(float))

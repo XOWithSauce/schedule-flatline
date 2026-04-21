@@ -22,7 +22,7 @@ namespace Flatline
 
     public class Bleeding : Disease
     {
-        public static readonly float passiveDiseaseHealingMax = 0.003f;
+        public static readonly float passiveDiseaseHealingMax = 0.0055f;
         public static readonly float passiveDiseaseHealingMin = 0.0001f;
 
         public float MaximumMaxHPReduction = 100f;
@@ -165,12 +165,18 @@ namespace Flatline
                 this.data.HealState += UnityEngine.Random.Range(passiveDiseaseHealingMin * 3f, passiveDiseaseHealingMax * 3f);
 
             // To make stemming bleeding healing more effective overtime and blood clots faster under pressure
-            float multiplier = Mathf.Lerp(12f, 24f, Mathf.Clamp01(this.data.HealState));
+            float multiplier = Mathf.Lerp(12f, 50f, Mathf.Clamp01(this.data.HealState));
             float progMultiplier = Mathf.Lerp(1f, 3f, Mathf.Clamp01((float)this.data.Progression / 5f));
             if (PlayerDiseaseDamage.isBleedingStemmed)
+            {
                 this.data.HealState += passiveDiseaseHealingMax * multiplier;
+                Log($"Stem heal: {this.data.HealState} +{passiveDiseaseHealingMax * multiplier}");
+            }
             else // Not stemmed reduce healing overtime
+            {
                 this.data.HealState = Mathf.Clamp01(this.data.HealState - passiveDiseaseHealingMax * progMultiplier);
+                Log($"No stem: {this.data.HealState} -{passiveDiseaseHealingMax * progMultiplier}");
+            }
 
             Log("Bleeding Max HP reduction total so far: " + maxHPReduced);
         }

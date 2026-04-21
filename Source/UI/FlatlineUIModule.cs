@@ -220,7 +220,7 @@ namespace Flatline
             rt.sizeDelta = new Vector2(150f, 35f);
             newElement.transform.localRotation = Quaternion.identity;
             newElement.transform.localScale = Vector3.one;
-            newElement.transform.localPosition = new Vector3(150.5101f, 0.0377f, -0.0941f);
+            newElement.transform.localPosition = new Vector3(150.5101f, 0f, 0f);
             Text textComp = newElement.GetComponent<Text>();
             if (textComp == null)
             {

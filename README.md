@@ -38,11 +38,73 @@ There are following configurations available through the file:
     - **true** (default): Disable respawning and after death you can only return to menu, **after which the last played save is permanently deleted!**.
     - **false**: Enable respawning (multiplayer) OR Loading last save (singleplayer).
 
+- **DrugSideEffects**
+    - **true** (default): Enables overdosing on drugs and medicine and adds effects to drugs.
+    - **false**: Disables the effects of consuming drugs and medications.
+
+- **PropertyTemperatureChanges**
+    - **true** (default): Properties get cold if door is kept open and outside is colder.
+    - **false**: Property temperatures do not change.
+
+- **WorldTemperatureChanges**
+    - **true** (default): World temperature changes based on time and weather.
+    - **false**: World temperature stays at 20 celsius.
+
 - **FahrenheitTemp**
-    - **true**: Display temperatures as Fahrenheit
-    - **false** (default): Display temperatures as Celsius
+    - **true**: Display temperatures as Fahrenheit.
+    - **false** (default): Display temperatures as Celsius.
 
+- **DiseasesEnabled**
+    - **true** (default): Enables all diseases.
+    - **false**: Disables all diseases.
 
+- **BleedingEnabled**
+    - **true** (default): Enable Bleeding disease.
+    - **false**: Disable Bleeding disease.
+
+- **BoneBreakEnabled**
+    - **true** (default): Enable Bone Break disease.
+    - **false**: Disable Bone Break disease.
+
+- **CancerEnabled**
+    - **true** (default): Enable Cancer disease.
+    - **false**: Disable Cancer disease.
+
+- **DepressionEnabled**
+    - **true** (default): Enable Depression disease.
+    - **false**: Disable Depression disease.
+
+- **FeverEnabled**
+    - **true** (default): Enable Fever disease.
+    - **false**: Disable Fever disease.
+
+- **WaterRequired**
+    - **true** (default): Player needs to drink to survive.
+    - **false**: Player does not need to drink to survive.
+
+- **FoodRequired**
+    - **true** (default): Player needs to eat to survive.
+    - **false**: Player does not need to eat to survive.
+
+- **EnergyRequired**
+    - **true** (default): Player needs to rest and manage energy.
+    - **false**: Player does not need to rest or manage energy.
+
+- **TemperatureRequired**
+    - **true** (default): Player needs to stay warm to survive.
+    - **false**: Player does not need to manage temperature to survive.
+
+- **WaterConsumption**
+    - **0.00087958** (default): Amount of water consumed per minute.
+
+- **FoodConsumption**
+    - **0.0015** (default): Amount of food consumed per minute.
+
+- **EnergyConsumption**
+    - **0.0007** (default): Amount of energy consumed per minute.
+
+- **TemperatureConsumption**
+    - **0.00022** (default): Amount of temperature lost per each degree difference.
 ---
 
 >    - 

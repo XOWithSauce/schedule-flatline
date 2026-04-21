@@ -50,7 +50,6 @@ using Il2CppScheduleOne.UI;
 [assembly: MelonLoader.VerifyLoaderVersion("0.7.0", true)]
 #endif
 
-
 namespace Flatline
 {
     public static class BuildInfo
@@ -59,7 +58,7 @@ namespace Flatline
         public const string Description = "";
         public const string Author = "XOWithSauce";
         public const string Company = null;
-        public const string Version = "1.0.0";
+        public const string Version = "1.0.1";
         public const string DownloadLink = "https://github.com/XOWithSauce/schedule-flatline";
     }
 
@@ -90,19 +89,154 @@ namespace Flatline
         #region Melon Prefs
         private MelonPreferences_Category category;
         private MelonPreferences_Entry<bool> PermanentDeath;
+        private MelonPreferences_Entry<bool> DrugSideEffects;
+        private MelonPreferences_Entry<bool> PropertyTemperatureChanges;
+        private MelonPreferences_Entry<bool> WorldTemperatureChanges;
         private MelonPreferences_Entry<bool> FahrenheitTemp;
+
+        private MelonPreferences_Entry<bool> DiseasesEnabled;
+        private MelonPreferences_Entry<bool> BleedingEnabled;
+        private MelonPreferences_Entry<bool> BoneBreakEnabled;
+        private MelonPreferences_Entry<bool> CancerEnabled;
+        private MelonPreferences_Entry<bool> DepressionEnabled;
+        private MelonPreferences_Entry<bool> FeverEnabled;
+
+        private MelonPreferences_Entry<bool> WaterRequired;
+        private MelonPreferences_Entry<bool> FoodRequired;
+        private MelonPreferences_Entry<bool> EnergyRequired;
+        private MelonPreferences_Entry<bool> TemperatureRequired;
+
+        private MelonPreferences_Entry<float> WaterConsumption;
+        private MelonPreferences_Entry<float> FoodConsumption;
+        private MelonPreferences_Entry<float> EnergyConsumption;
+        private MelonPreferences_Entry<float> TemperatureConsumption;
 
         public override void OnPreferencesSaved()
         {
             currentConfig.PermanentDeath = PermanentDeath.Value;
+            currentConfig.DrugSideEffects = DrugSideEffects.Value;
+            currentConfig.PropertyTemperatureChanges = PropertyTemperatureChanges.Value;
+            currentConfig.WorldTemperatureChanges = WorldTemperatureChanges.Value;
             currentConfig.FahrenheitTemp = FahrenheitTemp.Value;
+
+            currentConfig.DiseasesEnabled = DiseasesEnabled.Value;
+            currentConfig.BleedingEnabled = BleedingEnabled.Value;
+            currentConfig.BoneBreakEnabled = BoneBreakEnabled.Value;
+            currentConfig.CancerEnabled = CancerEnabled.Value;
+            currentConfig.DepressionEnabled = DepressionEnabled.Value;
+            currentConfig.FeverEnabled = FeverEnabled.Value;
+
+            currentConfig.WaterRequired = WaterRequired.Value;
+            currentConfig.FoodRequired = FoodRequired.Value;
+            currentConfig.EnergyRequired = EnergyRequired.Value;
+            currentConfig.TemperatureRequired = TemperatureRequired.Value;
+
+            FlatlinePlayer.DefaultThirstConsumption = WaterConsumption.Value;
+            FlatlinePlayer.DefaultFoodConsumption = FoodConsumption.Value;
+            FlatlinePlayer.DefaultEnergyConsumption = EnergyConsumption.Value;
+            FlatlinePlayer.TemperatureConsumptionPerMinutePerDegreeDiff = TemperatureConsumption.Value;
         }
 
         private void SetupMelonPreferences()
         {
             category = MelonPreferences.CreateCategory($"{BuildInfo.Name}_{BuildInfo.Author}", BuildInfo.Name);
-            PermanentDeath = category.CreateEntry("PermanentDeath", true, "Permanent Death Enabled");
-            FahrenheitTemp = category.CreateEntry("FahrenheitTemp", false, "Display Temperatures as Fahrenheit");
+            PermanentDeath = category.CreateEntry("PermanentDeath", true,
+                display_name: "PermanentDeath",
+                description: "Permanent Death Enabled"
+            );
+
+            DrugSideEffects = category.CreateEntry("DrugSideEffects", true,
+                display_name: "DrugSideEffects",
+                description: "Enables overdosing on drugs and medicine and adds effects to drugs"
+            );
+
+            PropertyTemperatureChanges = category.CreateEntry("PropertyTemperatureChanges", true,
+                display_name: "PropertyTemperatureChanges",
+                description: "Properties get cold if door is kept open and outside is colder"
+            );
+
+            WorldTemperatureChanges = category.CreateEntry("WorldTemperatureChanges", true,
+                display_name: "WorldTemperatureChanges",
+                description: "World temperature changes based on time and weather"
+            );
+
+            FahrenheitTemp = category.CreateEntry("FahrenheitTemp", false,
+                display_name: "FahrenheitTemp",
+                description: "Display Temperatures as Fahrenheit"
+            );
+
+            DiseasesEnabled = category.CreateEntry("DiseasesEnabled", true,
+                display_name: "DiseasesEnabled",
+                description: "Enables all diseases"
+            );
+
+            BleedingEnabled = category.CreateEntry("BleedingEnabled", true,
+                display_name: "BleedingEnabled",
+                description: "Enable Bleeding disease"
+            );
+
+            BoneBreakEnabled = category.CreateEntry("BoneBreakEnabled", true,
+                display_name: "BoneBreakEnabled",
+                description: "Enable Bone Break disease"
+            );
+
+            CancerEnabled = category.CreateEntry("CancerEnabled", true,
+                display_name: "CancerEnabled",
+                description: "Enable Cancer disease"
+            );
+
+            DepressionEnabled = category.CreateEntry("DepressionEnabled", true,
+                display_name: "DepressionEnabled",
+                description: "Enable Depression disease"
+            );
+
+            FeverEnabled = category.CreateEntry("FeverEnabled", true,
+                display_name: "FeverEnabled",
+                description: "Enable Fever disease"
+            );
+
+            WaterRequired = category.CreateEntry("WaterRequired", true,
+                display_name: "WaterRequired",
+                description: "Player needs to drink to survive"
+            );
+
+            FoodRequired = category.CreateEntry("FoodRequired", true,
+                display_name: "FoodRequired",
+                description: "Player needs to eat to survive"
+            );
+
+            EnergyRequired = category.CreateEntry("EnergyRequired", true,
+                display_name: "EnergyRequired",
+                description: "Player needs to rest and manage energy"
+            );
+
+            TemperatureRequired = category.CreateEntry("TemperatureRequired", true,
+                display_name: "TemperatureRequired",
+                description: "Player needs to stay warm to survive"
+            );
+
+            WaterConsumption = category.CreateEntry("WaterConsumption", 0.00087958f,
+                display_name: "WaterConsumption",
+                description: "Amount of water consumed per minute"
+            );
+
+            FoodConsumption = category.CreateEntry("FoodConsumption", 0.0015f,
+                display_name: "FoodConsumption",
+                description: "Amount of food consumed per minute"
+            );
+
+            EnergyConsumption = category.CreateEntry("EnergyConsumption", 0.0007f,
+                display_name: "EnergyConsumption",
+                description: "Amount of energy consumed per minute"
+            );
+
+            TemperatureConsumption = category.CreateEntry("TemperatureConsumption", 0.00022f,
+                display_name: "TemperatureConsumption",
+                description: "Amount of temperature lost per each degree difference"
+            );
+            Log("Diseases enabled: " + DiseasesEnabled.Value);
+            Log("In config: " + currentConfig.DiseasesEnabled);
+
             OnPreferencesSaved();
             MelonPreferences.Save();
         }
@@ -115,7 +249,8 @@ namespace Flatline
 
             currentConfig = new();
             SetupMelonPreferences();
-
+            Log("Diseases enabled: " + DiseasesEnabled.Value);
+            Log("In config: " + currentConfig.DiseasesEnabled);
             // Load images instantiate sprites
             ConfigLoader.LoadModResources();
 
@@ -131,7 +266,7 @@ namespace Flatline
         public override void OnUpdate()
         {
             if (!registered || isSaving || haltExecution) return;
-            UpdateConsumption();   
+            UpdateConsumption();
         }
 
         public override void OnSceneWasInitialized(int buildIndex, string sceneName)

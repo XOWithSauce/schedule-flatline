@@ -1,11 +1,10 @@
-using UnityEngine;
 using MelonLoader;
-
-using static Flatline.Flatline;
+using UnityEngine;
 using static Flatline.DebugModule;
-using static Flatline.FlatlineUIModule;
-using static Flatline.FlatlinePlayer;
 using static Flatline.DepressionSimulator;
+using static Flatline.Flatline;
+using static Flatline.FlatlinePlayer;
+using static Flatline.FlatlineUIModule;
 
 namespace Flatline
 {
@@ -75,8 +74,6 @@ namespace Flatline
                     this.data.HealState = result;
                 else
                     this.data.HealState += result / 10f;
-
-
             }
 
             this.data.HealState += UnityEngine.Random.Range(passiveDiseaseHealingMin, passiveDiseaseHealingMax);
@@ -87,6 +84,7 @@ namespace Flatline
                 if (minsSinceTemporaryCureStarted >= maxTemporaryCureMins)
                     isTemporaryCurePresent = false;
             }
+
 
             if (loadedPlayerData.State.healthData.TimesSmoked > 0 && loadedPlayerData.State.consumptionDatas.Count > 0)
             {

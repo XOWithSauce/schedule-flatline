@@ -152,65 +152,7 @@ namespace Flatline
                 propertyTemperatureDisplayTexts.Add(propertyCode, tmPro);
             }
 
-            // setup warm buildings bounds
-            // Northtown
-            List<BoxCollider> northtownColliders = new();
-
-            Transform hardwareNorthtown = Singleton<Map>.Instance.transform.Find("Hyland Point/Region_Northtown/Hardware Store/Small hardware store/Shop/Collider");
-            if (hardwareNorthtown != null && hardwareNorthtown.TryGetComponent<BoxCollider>(out var bc11))
-                northtownColliders.Add(bc11);
-            else
-                Log("Failed to find TR hardwareNorthtown");
-
-            Transform pawnShop = Singleton<Map>.Instance.transform.Find("Hyland Point/Region_Northtown/Pawn shop/Collider");
-            if (pawnShop != null && pawnShop.TryGetComponent<BoxCollider>(out var bc12))
-                northtownColliders.Add(bc12);
-            else
-                Log("Failed to find TR pawnShop");
-
-            warmBuildingsInRegion.Add(EMapRegion.Northtown, northtownColliders);
-
-            // Westville
-            List<BoxCollider> westvilleColliders = new();
-
-            Transform tattooShop = Singleton<Map>.Instance.transform.Find("Hyland Point/Region_Westville/Tattoo Parlour New/Collider");
-            if (tattooShop != null && tattooShop.TryGetComponent<BoxCollider>(out var bc21))
-                westvilleColliders.Add(bc21);
-            else
-                Log("Failed to find TR tattooShop");
-
-            warmBuildingsInRegion.Add(EMapRegion.Westville, westvilleColliders);
-
-            // Downtown
-            List<BoxCollider> downtownColliders = new();
-
-            Transform dealership = Singleton<Map>.Instance.transform.Find("Hyland Point/Region_Downtown/Dealership/Dealership/BoundingBox");
-            if (dealership != null && dealership.TryGetComponent<BoxCollider>(out var bc31))
-                downtownColliders.Add(bc31);
-            else
-                Log("Failed to find TR dealership");
-
-            Transform hardwareDowntown = Singleton<Map>.Instance.transform.Find("Hyland Point/Region_Downtown/HardwardStore/BoundingBox");
-            if (hardwareDowntown != null && hardwareDowntown.TryGetComponent<BoxCollider>(out var bc32))
-                downtownColliders.Add(bc32);
-            else
-                Log("Failed to find TR hardwareDowntown");
-
-            Transform boutique = Singleton<Map>.Instance.transform.Find("Hyland Point/Region_Downtown/Boutique Store/Collider");
-            if (boutique != null && boutique.TryGetComponent<BoxCollider>(out var bc33))
-                downtownColliders.Add(bc33);
-            else
-                Log("Failed to find TR boutique");
-
-            Transform REOffice = Singleton<Map>.Instance.transform.Find("Hyland Point/Region_Downtown/RE Office/Collider");
-            if (REOffice != null && REOffice.TryGetComponent<BoxCollider>(out var bc34))
-                downtownColliders.Add(bc34);
-            else
-                Log("Failed to find TR REOffice");
-
-            warmBuildingsInRegion.Add(EMapRegion.Downtown, downtownColliders);
-
-            // Docks
+            // Docks warm buildings that arent weather enclosures but still are warm inside
             List<BoxCollider> docksColliders = new();
 
             Transform clothingShop = Singleton<Map>.Instance.transform.Find("Hyland Point/Region_Docks/Clothing store with interior/Collider");
@@ -226,8 +168,6 @@ namespace Flatline
                 Log("Failed to find TR clothingShop");
 
             warmBuildingsInRegion.Add(EMapRegion.Docks, docksColliders);
-
-            darkMarket = Singleton<Map>.Instance.transform.Find("Hyland Point/Region_Docks/Dark Market Area/Docks Warehouse");
 
 
             Log("Finished initializing property temperature controller");
@@ -250,14 +190,14 @@ namespace Flatline
                 yield return Wait2;
                 if (!registered) yield break;
                 if (isSaving || Singleton<SaveManager>.Instance.IsSaving) continue;
-                if (haltExecution) continue;
+                if (haltExecution || !currentConfig.PropertyTemperatureChanges) continue;
 
                 for (int i = 0; i < Property.Properties.Count; i++)
                 {
                     yield return Wait2;
                     if (!registered) yield break;
                     if (isSaving || Singleton<SaveManager>.Instance.IsSaving) continue;
-                    if (haltExecution) continue;
+                    if (haltExecution || !currentConfig.PropertyTemperatureChanges) continue;
 
                     Property property = Property.Properties[i];
 
@@ -461,6 +401,8 @@ namespace Flatline
             [HarmonyPostfix]
             public static void Postfix(AirConditioner __instance)
             {
+                if (!currentConfig.PropertyTemperatureChanges) return;
+
                 if (__instance.ParentProperty != null)
                 {
                     string code = __instance.ParentProperty.propertyCode;
@@ -530,6 +472,8 @@ namespace Flatline
             public static bool Prefix(AirConditioner __instance)
             {
                 if (!registered) return true;
+                if (!currentConfig.PropertyTemperatureChanges) return true;
+
                 if (__instance.CurrentMode != AirConditioner.EMode.Heating) return true;
                 if (__instance.ParentProperty == null)
                 {

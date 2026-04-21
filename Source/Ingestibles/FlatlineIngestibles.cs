@@ -5,6 +5,7 @@ using MelonLoader;
 using HarmonyLib;
 
 using static Flatline.Flatline;
+using static Flatline.FlatlinePlayer;
 using static Flatline.PlayerDiseaseDamage;
 using static Flatline.PlayerConsumeDamage;
 using static Flatline.DebugModule;
@@ -18,7 +19,6 @@ using ScheduleOne.Product;
 using ScheduleOne.UI;
 using ScheduleOne.Property;
 using ScheduleOne.Interaction;
-using ScheduleOne.Map;
 #else
 using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.Equipping;
@@ -28,7 +28,6 @@ using Il2CppScheduleOne.Product;
 using Il2CppScheduleOne.UI;
 using Il2CppScheduleOne.Property;
 using Il2CppScheduleOne.Interaction;
-using Il2CppScheduleOne.Map;
 #endif
 
 namespace Flatline
@@ -78,30 +77,36 @@ namespace Flatline
 
         public static IEnumerator InitiateIngestibleModule()
         {
-            if (Singleton<HUD>.Instance.radialIndicator != null)
+            
+            if (Singleton<HUD>.Instance != null && Singleton<HUD>.Instance.radialIndicator != null)
             {
                 GameObject newObj = UnityEngine.Object.Instantiate(Singleton<HUD>.Instance.radialIndicator.gameObject, Singleton<HUD>.Instance.radialIndicator.transform.parent);
                 newObj.SetActive(true);
                 newObj.name = "RadialIndicatorAdditional";
                 RectTransform original = Singleton<HUD>.Instance.radialIndicator.gameObject.GetComponent<RectTransform>();
+                if (original == null)
+                    Log("Radial indicator has no rect trasform");
                 RectTransform rt = newObj.GetComponent<RectTransform>();
                 rt.position = original.position;
                 rt.rotation = original.rotation;
                 rt.localScale = original.localScale;
                 consumeRadialIndicator = newObj.GetComponent<Image>();
-                consumeRadialIndicator.enabled = true;
+                if (consumeRadialIndicator != null)
+                    consumeRadialIndicator.enabled = true;
+                else
+                    Log("Radial indicator has no Image component");
             }
             else
             {
                 Log("Failed to make radial indicator copy");
             }
-
+            Log("Radial indicator copy made");
 #if MONO
-            PlayerInventory.instance.onEquippedSlotChanged = (Action<int>)Delegate.Combine(PlayerInventory.instance.onEquippedSlotChanged, new Action<int>(OnSlotChanged));
+            PlayerInventory.Instance.onEquippedSlotChanged = (Action<int>)Delegate.Combine(PlayerInventory.instance.onEquippedSlotChanged, new Action<int>(OnSlotChanged));
 #else
-            PlayerInventory.instance.onEquippedSlotChanged += (Il2CppSystem.Action<int>)OnSlotChanged;
+            PlayerInventory.Instance.onEquippedSlotChanged += (Il2CppSystem.Action<int>)OnSlotChanged;
 #endif
-
+            Log("Equipped slot change callback assigned");
             // Fetch required sound clips
             Func<string, ItemDefinition> GetItem;
 
@@ -116,27 +121,60 @@ namespace Flatline
             ItemInstance shroomItemInst = shroomItemDef.GetDefaultInstance(1);
 
             ShroomInstance shroomInst = null;
+            ShroomDefinition shroomDef = null;
             Equippable_Cuke cukeEquippable = null;
 #if MONO
             shroomInst = shroomItemInst as ShroomInstance;
+            shroomDef = shroomItemDef as ShroomDefinition;
             cukeEquippable = cukeItemDef.Equippable as Equippable_Cuke;
 #else
             shroomInst = shroomItemInst.TryCast<ShroomInstance>();
+            shroomDef = shroomItemDef.TryCast<ShroomDefinition>();
             cukeEquippable = cukeItemDef.Equippable.TryCast<Equippable_Cuke>();
 #endif
-            if (shroomInst != null)
+
+            // its unassigned from def annd needs instantiate in the form of equip to get the clip?
+
+            ProductConsumeAnimation consumeInstantiated = UnityEngine.Object.Instantiate<ProductConsumeAnimation>(shroomDef.ConsumeAnimation, null);
+
+            if (consumeInstantiated.ConsumeSound == null)
             {
-                munchClip = shroomInst._shroomDefinition.ConsumeAnimation.ConsumeSound.AudioSource.clip;
+                Log("Failed to instantiate sound component");
             }
             else
-                Log("Could not assing munch clip");
+            {
+                if (consumeInstantiated.ConsumeSound.Clip == null)
+                {
+                    Log("Could not instantiate clip");
+                }
+                else
+                {
+                    munchClip = consumeInstantiated.ConsumeSound.Clip;
+                }
+            }
 
+            UnityEngine.Object.Destroy(consumeInstantiated.gameObject);
+            consumeInstantiated = null;
+
+            yield return Wait01;
+            Log($"Is null:  {munchClip == null}");
             if (cukeEquippable != null)
             {
-                drinkClip = cukeEquippable.SlurpSound.AudioSource.clip;
+                Log("Assiging drink clip");
+                Equippable_Cuke equippable = UnityEngine.Object.Instantiate<Equippable_Cuke>(cukeEquippable, null);
+                if (equippable != null && equippable.SlurpSound != null && equippable.SlurpSound.Clip != null)
+                {
+                    drinkClip = equippable.SlurpSound.Clip;
+                }
+                UnityEngine.Object.Destroy(equippable.gameObject);
+                equippable = null;
+
+                yield return Wait01;
+                Log($"Is null:  {drinkClip == null}");
             }
             else
                 Log("Could not assing drink clip");
+            Log("Sound clips found");
 
             GameObject eatSound = new("FlatlineIngestorAudio");
 
@@ -145,7 +183,7 @@ namespace Flatline
             ingestorAudio.playOnAwake = false;
             ingestorAudio.volume = 0.7f;
             eatSound.SetActive(true);
-
+            Log("IngestorAudio made");
             //tap for water drinking
             Tap[] allTaps = UnityEngine.Object.FindObjectsOfType<Tap>(true);
             foreach (Tap tap in allTaps)
@@ -205,8 +243,6 @@ namespace Flatline
             isCurrentItemValid = false;
             currentConsumeDuration = 0f;
             ingestingItem = false;
-
-
         }
 
 
@@ -341,11 +377,11 @@ namespace Flatline
 
                 Player.Local.Health.CurrentHealth = Mathf.Clamp(Player.Local.Health.CurrentHealth + ingestible.HPRegen, 0f, loadedPlayerData.State.healthData.MaxHP);
 
-                loadedPlayerData.State.Energy = Mathf.Clamp01(loadedPlayerData.State.Energy + ingestible.Energy);
+                SetEnergy(Mathf.Clamp01(loadedPlayerData.State.Energy + ingestible.Energy));
 
-                loadedPlayerData.State.Thirst = Mathf.Clamp01(loadedPlayerData.State.Thirst + ingestible.Thirst);
+                SetWater(Mathf.Clamp01(loadedPlayerData.State.Thirst + ingestible.Thirst));
 
-                loadedPlayerData.State.Hunger = Mathf.Clamp01(loadedPlayerData.State.Hunger + ingestible.Food);
+                SetFood(Mathf.Clamp01(loadedPlayerData.State.Hunger + ingestible.Food));
 
                 if ((ingestible.healIllness || ingestible.increaseSanity) && allDiseases.Count > 0)
                 {
@@ -421,7 +457,7 @@ namespace Flatline
             tap.SetHeldOpen(true);
             
             yield return Wait05;
-            loadedPlayerData.State.Thirst = Mathf.Clamp(loadedPlayerData.State.Thirst + 0.08f, 0f, 1f);
+            SetWater(Mathf.Clamp(loadedPlayerData.State.Thirst + 0.08f, 0f, 1f));
             yield return Wait1;
             tap.SetHeldOpen(false);
             yield return Wait1;

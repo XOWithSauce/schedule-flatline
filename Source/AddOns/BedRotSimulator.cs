@@ -183,7 +183,7 @@ namespace Flatline
             Vector3 originalStandPoint = playerTrRoot.localPosition;
             Quaternion originalRotation = playerTrRoot.localRotation;
 
-            Vector3 targetLocalPosition = new Vector3(0.009f, 0.23f, 0.012f);
+            Vector3 targetLocalPosition = new Vector3(0.009f, 0.24f, 0.012f);
             Quaternion targetRotation = Quaternion.Euler(270f, 0f, 0f);
 
             float animationDuration = 3f;
@@ -257,7 +257,7 @@ namespace Flatline
         {
             if (!registered || isSaving || !isBedrotting || isQueuedForDeath || haltExecution) return;
             if (loadedPlayerData.State.Energy < 1f)
-                loadedPlayerData.State.Energy = Mathf.Clamp01(loadedPlayerData.State.Energy + energyRegenPerMinute);
+                SetEnergy(Mathf.Clamp01(loadedPlayerData.State.Energy + energyRegenPerMinute));
 
             if (loadedPlayerData.State.healthData.CurrentHP < loadedPlayerData.State.healthData.MaxHP)
             {

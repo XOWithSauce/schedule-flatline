@@ -27,6 +27,7 @@ using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.GameTime;
 using Il2CppScheduleOne.Map;
 using Il2CppScheduleOne.Interaction;
+using Il2CppScheduleOne.Weather;
 #endif
 
 namespace Flatline
@@ -84,7 +85,10 @@ namespace Flatline
 
         public static void ApplyLoadedDiseases()
         {
-            foreach(DiseaseData data in loadedPlayerData.DiseaseData)
+            if (!currentConfig.DiseasesEnabled)
+                return;
+
+            foreach (DiseaseData data in loadedPlayerData.DiseaseData)
             {
                 switch (data.DiseaseID)
                 {
@@ -153,6 +157,27 @@ namespace Flatline
 
         public static T AddNewDisease<T>(float severity) where T : Disease
         {
+            // Check that config has enabled
+            if (!currentConfig.DiseasesEnabled)
+                return null;
+
+            if (typeof(T) == typeof(Bleeding) && !currentConfig.BleedingEnabled)
+                return null;
+
+            if (typeof(T) == typeof(BoneBreak) && !currentConfig.BoneBreakEnabled)
+                return null;
+
+            if (typeof(T) == typeof(Cancer) && !currentConfig.CancerEnabled)
+                return null;
+
+            if (typeof(T) == typeof(Depression) && !currentConfig.DepressionEnabled)
+                return null;
+
+            if (typeof(T) == typeof(Fever) && !currentConfig.FeverEnabled)
+                return null;
+
+
+
             float newSeverity = Mathf.Clamp(severity, 0f, 0.3f);
             foreach (Disease activeDisease in allDiseases)
             {
@@ -199,10 +224,12 @@ namespace Flatline
 
         public static void CalculateDepressionPassiveProbability()
         {
+
             float cumulativePlayTime = Mathf.Clamp01((float)NetworkSingleton<TimeManager>.Instance.ElapsedDays / 100f);
 
             int currentMinsInside = minsInsideProperty != 0 ? minsInsideProperty : 1;
             int currentMinsOutside = minsOutsideProperty != 0 ? minsOutsideProperty : 1;
+            
 
             float cabinLunacy = 0f;
             if (currentMinsInside >= currentMinsOutside)
@@ -259,8 +286,12 @@ namespace Flatline
             else
                 genderAdjustedProbability = UnityEngine.Random.Range(0.003f, 0.004f);
 
-            float subtotal = (cumulativePlayTime + cabinLunacy + currentlyInSystem + stateTotal + genderAdjustedProbability) / 5f;
+            float minsInSun = (float)minsWithSunnyWeather / 1440f;
+            float weatherAdjusted = Mathf.Lerp(0.25f, 0f, minsInSun);
 
+            float subtotal = (cumulativePlayTime + cabinLunacy + currentlyInSystem + stateTotal + genderAdjustedProbability + weatherAdjusted) / 6f;
+
+            Log($"Mins with sun: {minsWithSunnyWeather} ({weatherAdjusted})");
             Log("Depression chance subtotal: " + subtotal);
             if (UnityEngine.Random.Range(0f, 1f) < subtotal)
             {
@@ -270,6 +301,7 @@ namespace Flatline
 
             minsOutsideProperty = 0;
             minsInsideProperty = 0;
+            minsWithSunnyWeather = 0;
             return;
         }
 
@@ -513,23 +545,34 @@ namespace Flatline
 
         public static void CalculateFeverProbability()
         {
-            float annualOccurance = UnityEngine.Random.Range(5000f, 20000f) / 100000f;
+            float annualOccurance = UnityEngine.Random.Range(2000f, 12000f) / 100000f;
             float hourlyChance = annualOccurance / 365f / 24f;
 
-            hourlyChance = Mathf.Clamp01(hourlyChance + Mathf.Lerp(0.55f, 0f, loadedPlayerData.State.Temperature));
+            // Days since flu max +33% at 24 days since no flu
+            float fluFactor = Mathf.Lerp(1f, 1.33f, Mathf.Clamp01(((float)loadedPlayerData.State.healthData.daysSinceFlu / 24f)));
 
-            hourlyChance = Mathf.Clamp01(hourlyChance + loadedPlayerData.State.healthData.Predisposition);
+            // Temp
+            float tempFactor = Mathf.Lerp(1.08f, 1f, loadedPlayerData.State.Temperature);
 
+            // Predisposition
+            float predispFactor = Mathf.Lerp(1f, 2f, loadedPlayerData.State.healthData.Predisposition);
+
+            // Cancer :(
+            float cancerFactor = 1f;
             for (int i = 0; i < allDiseases.Count; i++)
             {
                 if (allDiseases[i].data.DiseaseID == "cancer" && allDiseases[i].data.Active && allDiseases[i].data.HealState < 1f)
-                    hourlyChance = Mathf.Clamp01(hourlyChance * UnityEngine.Random.Range(1.02f, 1.1f));
+                {
+                    cancerFactor = Mathf.Lerp(1f, 5f, Mathf.Clamp01(allDiseases[i].data.Progression));
+                }
             }
 
+            // Environment
+            float sewerFactor = 1f;
             if (Singleton<SewerCameraPresense>.Instance.IsPointInSewerArea(Player.Local.CenterPointTransform.position))
-                hourlyChance = Mathf.Clamp01(hourlyChance + UnityEngine.Random.Range(0.001f, 0.08f));
+                sewerFactor = UnityEngine.Random.Range(1.1f, 1.3f);
 
-            hourlyChance = hourlyChance / 5f;
+            hourlyChance = hourlyChance * fluFactor * tempFactor * predispFactor * cancerFactor * sewerFactor;
             Log("Fever eval chance: " + hourlyChance);
             if (UnityEngine.Random.Range(0f, 1f) < hourlyChance)
             {
@@ -599,7 +642,7 @@ namespace Flatline
             float totalSystematicDamage = 0f;
             foreach (ConsumptionData data in loadedPlayerData.State.consumptionDatas.Values)
             {
-                totalSystematicDamage = Mathf.Clamp01(data.overtimeLungDamage + data.overtimeLiverDamage);
+                totalSystematicDamage += Mathf.Clamp01(data.overtimeLungDamage + data.overtimeLiverDamage);
             }
 
             // For when player sleeps in the sewers apartment (or passes out due to energy and sleeps in sewer)
@@ -607,9 +650,9 @@ namespace Flatline
             if (Singleton<SewerCameraPresense>.Instance.IsPointInSewerArea(Player.Local.CenterPointTransform.position))
                 sewerToxinPresence = UnityEngine.Random.Range(0.01f, 0.30f);
 
-            float subtotal = Mathf.Clamp01(((maxHpLostNorm + predisposition + gluttony + weight + timesSmokeNorm + totalSystematicDamage) / 10f) + (dailyOccurance + sewerToxinPresence + genderTimeAdjustedProbability) / 5f);
-
-            Log("Cancer eval subtotal: " + subtotal);
+            float biology = (maxHpLostNorm + predisposition + gluttony + weight + timesSmokeNorm + totalSystematicDamage) / 12f;
+            float environmental = (dailyOccurance + sewerToxinPresence + genderTimeAdjustedProbability) / 1.4f;
+            float subtotal = Mathf.Clamp01((biology + environmental) / 2f);
             if (UnityEngine.Random.Range(0f, 1f) < subtotal)
             {
                 Log("Cancer chance hits");
