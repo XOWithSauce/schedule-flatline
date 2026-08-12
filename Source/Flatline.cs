@@ -44,10 +44,10 @@ using Il2CppScheduleOne.UI;
 
 #if MONO
 [assembly: MelonPlatformDomain(MelonPlatformDomainAttribute.CompatibleDomains.MONO)]
-[assembly: MelonLoader.VerifyLoaderVersion("0.7.0", true)]
+[assembly: MelonLoader.VerifyLoaderVersion("0.7.2", true)]
 #else
 [assembly: MelonPlatformDomain(MelonPlatformDomainAttribute.CompatibleDomains.IL2CPP)]
-[assembly: MelonLoader.VerifyLoaderVersion("0.7.0", true)]
+[assembly: MelonLoader.VerifyLoaderVersion("0.7.2", true)]
 #endif
 
 namespace Flatline
@@ -58,7 +58,7 @@ namespace Flatline
         public const string Description = "";
         public const string Author = "XOWithSauce";
         public const string Company = null;
-        public const string Version = "1.0.1";
+        public const string Version = "1.0.2";
         public const string DownloadLink = "https://github.com/XOWithSauce/schedule-flatline";
     }
 

@@ -1,3 +1,10 @@
+# 1.0.2
+- Compiled the mod for game version 0.4.6f12 and ensured that everything works
+- Fixed a bug in the latest game version where if the mod has a coloured dash in the custom dialogue options text, the game would crash when opening dialogue
+- Removed logic that allowed bed rotting module to take into account multiplayer preventing multiple players from bed rotting in the same bed, due to Player class no longer containing networking logic for the current bed field.
+- Temporarily removed logic that allowed user to change mod audio volumes using game settings menu due to action no longer being just a system action and now being a custom action that warrants further testing and inspecting, hopefully back working in next update.
+- Game no longer tracks Players energy by default for the eyelid closing with decreasing energy and mod will not in this version do that eyelid closing anymore until it will implemented back by the mod hopefully by next update.
+
 # 1.0.1
 - Compiled the mod for game version 0.4.5f2 and ensured that everything works with latest patch, addressing 2 GH issues.
  

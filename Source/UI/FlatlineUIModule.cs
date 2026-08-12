@@ -179,12 +179,11 @@ namespace Flatline
                 if (!registered) yield break;
                 if (diseaseContainerObj == null) continue;
                 // set invisible diseases icons if they are visible during ui usage
-                if (PlayerSingleton<PlayerCamera>.Instance.activeUIElementCount > 0 && diseaseContainerObj.activeSelf)
+                if (PlayerSingleton<PlayerCamera>.Instance.ActiveUIElementCount > 0 && diseaseContainerObj.activeSelf)
                     diseaseContainerObj.SetActive(false);
-                else if (PlayerSingleton<PlayerCamera>.Instance.activeUIElementCount == 0 && !diseaseContainerObj.activeSelf)
+                else if (PlayerSingleton<PlayerCamera>.Instance.ActiveUIElementCount == 0 && !diseaseContainerObj.activeSelf)
                     diseaseContainerObj.SetActive(true);
             }
-            
             yield break;
         }
 

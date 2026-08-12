@@ -12,9 +12,9 @@ using static Flatline.ConfigLoader;
 using static Flatline.PropertyTemperatureController;
 using static Flatline.DebugModule;
 
-
 #if MONO
 using ScheduleOne.Audio;
+using ScheduleOne.Core.Audio;
 using ScheduleOne.DevUtilities;
 using ScheduleOne.GameTime;
 using ScheduleOne.PlayerScripts;
@@ -26,6 +26,7 @@ using ScheduleOne.ItemFramework;
 using ScheduleOne.FX;
 using ScheduleOne.UI;
 using ScheduleOne.Weather;
+using ScheduleOne.Core.Weather;
 using ScheduleOne;
 using ScheduleOne.Money;
 using ScheduleOne.Map;
@@ -33,6 +34,7 @@ using ScheduleOne.Persistence;
 using FishNet;
 #else
 using Il2CppScheduleOne.Audio;
+using Il2CppScheduleOne.Core.Audio;
 using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.GameTime;
 using Il2CppScheduleOne.PlayerScripts;
@@ -44,6 +46,7 @@ using Il2CppScheduleOne.ItemFramework;
 using Il2CppScheduleOne.FX;
 using Il2CppScheduleOne.UI;
 using Il2CppScheduleOne.Weather;
+using Il2CppScheduleOne.Core.Weather;
 using Il2CppScheduleOne;
 using Il2CppScheduleOne.Money;
 using Il2CppScheduleOne.Map;
@@ -133,7 +136,7 @@ namespace Flatline
         public static void InitFlatlinePlayer()
         {
             Player.Local.Health.CurrentHealth = loadedPlayerData.State.healthData.CurrentHP;
-            Player.Local.Energy.CurrentEnergy = Mathf.Lerp(1f, 100f, loadedPlayerData.State.Energy);
+            // Player.Local.Energy.CurrentEnergy = Mathf.Lerp(1f, 100f, loadedPlayerData.State.Energy);
             ThirstSlider.value = loadedPlayerData.State.Thirst;
             HungerSlider.value = loadedPlayerData.State.Hunger;
             EnergySlider.value = loadedPlayerData.State.Energy;
@@ -168,10 +171,11 @@ namespace Flatline
             }
 
             // add listener to update sfx volumes
+            // TODO: Fixme onVolumeSettingsChanged is of type PreallocatedAction with source showing cappacit on it, ensure not being over cappacit after adding listener and ensure casting works both mono il2cpp without issues
 #if MONO
-            Singleton<AudioManager>.Instance.onVolumeSettingsChanged = (Action)Delegate.Combine(Singleton<AudioManager>.Instance.onVolumeSettingsChanged, new Action(OnAudioSettingsChanged));
+            //Singleton<AudioManager>.Instance.onVolumeSettingsChanged = (Action)Delegate.Combine(Singleton<AudioManager>.Instance.onVolumeSettingsChanged, new Action(OnAudioSettingsChanged));
 #else
-            Singleton<AudioManager>.Instance.onVolumeSettingsChanged += (Il2CppSystem.Action)OnAudioSettingsChanged;
+            //Singleton<AudioManager>.Instance.onVolumeSettingsChanged += (Il2CppSystem.Action)OnAudioSettingsChanged;
 #endif
             Log("Finished init player");
         }
@@ -533,7 +537,7 @@ namespace Flatline
             else
                 SetEnergy(Mathf.Clamp01(loadedPlayerData.State.Energy - EnergyConsumptionPerMinute));
 
-            Player.Local.Energy.CurrentEnergy = Mathf.Lerp(1f, 100f, loadedPlayerData.State.Energy);
+            // Player.Local.Energy.CurrentEnergy = Mathf.Lerp(1f, 100f, loadedPlayerData.State.Energy);
 
             if (!Mathf.Approximately(PlayerMovement.StaticMoveSpeedMultiplier, loadedPlayerData.State.healthData.MoveSpeedScale))
             {
@@ -604,7 +608,7 @@ namespace Flatline
             else
                 minsOutsideProperty++;
 
-            WeatherConditions weather = NetworkSingleton<EnvironmentManager>.Instance.CurrentWeatherConditions;
+            WeatherConditions weather = NetworkSingleton<EnvironmentManager>.Instance._currentWeatherConditions;
             if (weather.Sunny > 0.5f && weather.Cloudy <= 0.49f && weather.Rainy <= 0.25f && weather.Stormy <= 0.25f)
                 minsWithSunnyWeather++;
 
@@ -1100,7 +1104,7 @@ namespace Flatline
                     {
                         while(enumerator.MoveNext())
                         {
-                            if (enumerator.Current.WithinEnclosure(Player.Local.CenterPointTransform.position, out float _))
+                            if (enumerator.Current.WithinEnclosure(Player.Local.CenterPointTransform.position, Vector3.zero, out float _, out float _))
                             {
                                 inWeatherEclosure = true;
                                 break;
@@ -1113,7 +1117,7 @@ namespace Flatline
                     {
                         while (enumerator.MoveNext())
                         {
-                            if (enumerator.Current.WithinEnclosure(Player.Local.CenterPointTransform.position, out float _))
+                            if (enumerator.Current.WithinEnclosure(Player.Local.CenterPointTransform.position, Vector3.zero, out float _, out float _))
                             {
                                 inWeatherEclosure = true;
                                 break;
@@ -1183,7 +1187,7 @@ namespace Flatline
 
         public static float GetWeatherAdjustedWorldTemp(float temp, float currentMin, float currentMax)
         {
-            WeatherConditions weather = NetworkSingleton<EnvironmentManager>.Instance.CurrentWeatherConditions;
+            WeatherConditions weather = NetworkSingleton<EnvironmentManager>.Instance._currentWeatherConditions;
             float total = weather.Sunny + weather.Cloudy + weather.Windy + weather.Foggy + weather.Rainy + weather.Stormy + weather.Sleet + weather.Hail + weather.Snowy;
             float time = (float)NetworkSingleton<TimeManager>.Instance.CurrentTime;
             float sunPower = (time > 600 && time < 1800) ? 1f : 0f;
@@ -1241,17 +1245,6 @@ namespace Flatline
     {
         [HarmonyPrefix]
         public static bool Prefix(PlayerHealth __instance)
-        {
-            return false;
-        }
-    }
-
-    // Disable minpass energy logic incase it gets toggled somepoint in the future
-    [HarmonyPatch(typeof(PlayerEnergy), "MinPass")]
-    public static class PlayerEnergy_MinPass_Patch
-    {
-        [HarmonyPrefix]
-        public static bool Prefix(PlayerEnergy __instance)
         {
             return false;
         }

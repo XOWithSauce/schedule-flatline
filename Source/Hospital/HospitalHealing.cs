@@ -87,7 +87,7 @@ namespace Flatline
         {
             DialogueController controller = npc.DialogueHandler.gameObject.GetComponent<DialogueController>();
             DialogueController.DialogueChoice choice = new();
-            choice.ChoiceText = $"Cure {diseaseID} <color=#FF3008>-${cureCosts[diseaseID]}</color>";
+            choice.ChoiceText = $"Cure {diseaseID} <color=#FF3008>${cureCosts[diseaseID]}</color>";
             choice.Enabled = false;
 
             void OnCureChoosen()

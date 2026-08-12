@@ -318,7 +318,7 @@ namespace Flatline
         public static void IngestCurrentItem()
         {
             int current = PlayerSingleton<PlayerInventory>.Instance._equippedSlotIndex;
-            ItemInstance item = Player.Local.Inventory[current].ItemInstance;
+            ItemInstance item = Player.Local._inventory[current].ItemInstance;
             if (item != null)
             {
                 AudioClip currentClip = (item.ID == "flumedicine") ? drinkClip : munchClip;
@@ -416,7 +416,7 @@ namespace Flatline
             int current = PlayerSingleton<PlayerInventory>.Instance._equippedSlotIndex;
             if (current >= 0 && current < 8)
             {
-                ItemInstance item = Player.Local.Inventory[current].ItemInstance;
+                ItemInstance item = Player.Local._inventory[current].ItemInstance;
                 if (item != null)
                 {
                     if (addOnConsumption.Contains(item.ID))

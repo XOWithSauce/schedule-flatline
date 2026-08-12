@@ -144,17 +144,6 @@ namespace Flatline
                 intObj.SetInteractableState(InteractableObject.EInteractableState.Invalid);
                 intObj.message = "Can't bedrot at late night";
             }
-            else if (Player.PlayerList.Count > 1)
-            {
-                foreach (Player player in Player.PlayerList)
-                {
-                    if (player.CurrentBed == bed.NetworkObject)
-                    {
-                        intObj.SetInteractableState(InteractableObject.EInteractableState.Invalid);
-                        intObj.message = "Someone is already bedrotting here";
-                    }
-                }
-            }
             else
             {
                 intObj.SetInteractableState(InteractableObject.EInteractableState.Default);
@@ -171,7 +160,6 @@ namespace Flatline
             intObj.enabled = false;
             bed.intObj.enabled = false;
 
-            Player.Local.CurrentBed = bed.NetworkObject;
             PlayerSingleton<PlayerCamera>.Instance.SetCanLook(false);
             PlayerSingleton<PlayerMovement>.Instance.CanMove = false;
             PlayerSingleton<PlayerMovement>.Instance.enabled = false;
@@ -247,7 +235,6 @@ namespace Flatline
             bed.intObj.enabled = true;
 
             isBedrotting = false;
-            Player.Local.CurrentBed = null;
 
             AfterBedrotEnd();
             yield break;
