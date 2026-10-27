@@ -16,6 +16,10 @@
 		<Optimize>true</Optimize>
 		<DefineConstants>$(DefineConstants);TRACE</DefineConstants>
 	</PropertyGroup>
+		
+	<Target Name="PostBuild" AfterTargets="Build">
+		<Copy SourceFiles="$(TargetDir)$(TargetFileName)" DestinationFolder="C:\Program Files (x86)\Steam\steamapps\common\Schedule I\Mods\" OverwriteReadOnlyFiles="true" />
+	</Target>
 	
 	<PropertyGroup>
 		<ImplicitUsings>enable</ImplicitUsings>
