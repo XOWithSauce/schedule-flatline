@@ -48,6 +48,7 @@ namespace Flatline
         public static RectTransform scoreBoard;
         public static string causeOfDeath = string.Empty;
         public static TextMeshProUGUI deathTitleText;
+        private static bool deathCleanupStarted;
 
         public static Dictionary<string, GameObject> diseaseIcons = new();
         public static GameObject diseaseContainerObj;
@@ -60,6 +61,7 @@ namespace Flatline
             CustomButton = null;
             WorldTemperature = null;
             scoreBoard = null;
+            deathTitleText = null;
             causeOfDeath = string.Empty;
             diseaseIcons.Clear();
             diseaseContainerObj = null;
@@ -251,8 +253,15 @@ namespace Flatline
         #region Death Screen
         public static void InitiateDeathScreen()
         {
+            deathCleanupStarted = false;
             GameObject newButton = null;
 
+#if IL2CPP
+            // The 0.4.7 hierarchy no longer guarantees the old child name.
+            Button respawnButton = Singleton<DeathScreen>.Instance.respawnButton;
+            if (respawnButton != null)
+                newButton = UnityEngine.Object.Instantiate(respawnButton.gameObject, Singleton<DeathScreen>.Instance.Container);
+#else
             for (int i = 0; i < Singleton<DeathScreen>.Instance.Container.childCount; i++)
             {
                 Transform tr = Singleton<DeathScreen>.Instance.Container.GetChild(i);
@@ -262,25 +271,32 @@ namespace Flatline
                     break;
                 }
             }
+#endif
 
-            if (newButton == null)
-                return;
-
-            newButton.transform.position = new Vector3(960f, 510f, 0f);
-            newButton.name = "Return to Menu";
-            RectTransform rt = newButton.GetComponent<RectTransform>();
-            rt.sizeDelta = new Vector2(180f, 70f);
-            CustomButton = newButton.GetComponent<Button>();
-            CustomButton.onClick.RemoveAllListeners();
-            CustomButton.onClick.AddListener((UnityEngine.Events.UnityAction)OnReturnToMenuClicked);
-
-            if (newButton.transform.childCount > 0)
+            if (newButton != null)
             {
-                TextMeshProUGUI textComp = newButton.transform.GetChild(0).GetComponent<TextMeshProUGUI>();
-                textComp.text = "Delete Save and Return to Menu";
-                textComp.color = new Color(1f, 1f, 1f, 1f);
+                newButton.transform.position = new Vector3(960f, 510f, 0f);
+                newButton.name = "Return to Menu";
+                RectTransform rt = newButton.GetComponent<RectTransform>();
+                rt.sizeDelta = new Vector2(180f, 70f);
+                CustomButton = newButton.GetComponent<Button>();
+                if (CustomButton != null)
+                {
+                    // Cloning a prefab can retain persistent respawn listeners.
+                    CustomButton.onClick = new Button.ButtonClickedEvent();
+                    CustomButton.onClick.AddListener((UnityEngine.Events.UnityAction)OnReturnToMenuClicked);
+                }
+
+                TextMeshProUGUI textComp = newButton.GetComponentInChildren<TextMeshProUGUI>(true);
+                if (textComp != null)
+                {
+                    textComp.text = Player.PlayerList.Count == 1 ? "Delete Save and Return to Menu" : "Return to Menu (co-op save kept)";
+                    textComp.color = Color.white;
+                }
+                newButton.SetActive(true);
             }
-            newButton.SetActive(true);
+            else
+                MelonLogger.Warning("Flatline: no respawn button to clone; automatic solo permadeath cleanup will still run.");
 
             GameObject scoreBoardObj = new GameObject("Scoreboard");
             scoreBoardObj.transform.parent = Singleton<DeathScreen>.Instance.Container;
@@ -302,6 +318,8 @@ namespace Flatline
             {
                 deathTitleText = titleTr.gameObject.GetComponent<TextMeshProUGUI>();
             }
+            if (deathTitleText == null)
+                MelonLogger.Warning("Flatline: death screen title not found; skipping its animation.");
             Log("DeathScreen elements done");
             return;
         }
@@ -326,10 +344,16 @@ namespace Flatline
             if (lastDamageSources.Count > 0)
                 lastDamage = lastDamageSources[0];
 
+            if (scoreBoard == null)
+            {
+                MelonLogger.Warning("Flatline: death scoreboard unavailable; skipping the score display.");
+                yield break;
+            }
+
             Dictionary<string, string> scoreDisplays = new()
             {
-                { "Days survived: ", NetworkSingleton<TimeManager>.Instance.ElapsedDays.ToString() },
-                { "Networth: ", Mathf.RoundToInt(NetworkSingleton<MoneyManager>.Instance.LastCalculatedNetworth).ToString() },
+                { "Days survived: ", NetworkSingleton<TimeManager>.Instance != null ? NetworkSingleton<TimeManager>.Instance.ElapsedDays.ToString() : "?" },
+                { "Networth: ", NetworkSingleton<MoneyManager>.Instance != null ? Mathf.RoundToInt(NetworkSingleton<MoneyManager>.Instance.LastCalculatedNetworth).ToString() : "?" },
                 { "Cause of Death: ", causeOfDeath },
                 { "Last damage source: ", lastDamage },
             };
@@ -337,7 +361,7 @@ namespace Flatline
             List<TextMeshProUGUI> textElements = new();
 
             // in multiplayer if no perma death monitor until respawn button is pressed
-            string originalTitle = deathTitleText.text;
+            string originalTitle = deathTitleText != null ? deathTitleText.text : string.Empty;
             if (Player.PlayerList.Count > 1 && !currentConfig.PermanentDeath)
                 coros.Add(MelonCoroutines.Start(WaitUntilRespawn(originalTitle)));
 
@@ -380,7 +404,8 @@ namespace Flatline
             }
 
             // animate title characters change
-            coros.Add(MelonCoroutines.Start(AnimateRandomLettersInTitle()));
+            if (deathTitleText != null)
+                coros.Add(MelonCoroutines.Start(AnimateRandomLettersInTitle()));
 
             Log("Generated death screen");
             yield break;
@@ -388,8 +413,7 @@ namespace Flatline
 
         public static IEnumerator AnimateRandomLettersInTitle()
         {
-
-            string originalTitle = deathTitleText.text;
+            if (deathTitleText == null) yield break;
             string flatlined = "FLATLINED";
             if (deathTitleText != null)
             {
@@ -450,70 +474,138 @@ namespace Flatline
             if (!registered) yield break;
 
             Log("Player respawned resetting death screen text");
-            deathTitleText.text = originalText;
+            if (deathTitleText != null)
+                deathTitleText.text = originalText;
             yield break;
         }
 
         public static void OnReturnToMenuClicked()
         {
             Log("Returning to menu...");
-            SaveInfo currentInfo = Singleton<LoadManager>.Instance.ActiveSaveInfo;
-            if (currentInfo == null || currentInfo.SavePath == string.Empty)
+            BeginPermanentDeathCleanup();
+        }
+
+        public static IEnumerator FinishPermanentDeathAfterDelay()
+        {
+            // This must not depend on the death-screen button or scaled game time.
+            float deadline = Time.realtimeSinceStartup + 30f;
+            while (registered && Time.realtimeSinceStartup < deadline &&
+                   (Singleton<DeathScreen>.Instance == null || !Singleton<DeathScreen>.Instance.isOpen))
+                yield return null;
+            if (Singleton<DeathScreen>.Instance == null || !Singleton<DeathScreen>.Instance.isOpen)
             {
-                Log("Active save info path is null, cant delete.");
-                Singleton<LoadManager>.Instance.ExitToMenu(null, null, false);
+                MelonLogger.Error("Flatline: death screen did not open; automatic save deletion cancelled.");
+                yield break;
+            }
+            yield return new WaitForSecondsRealtime(5f);
+            if (registered && isQueuedForDeath && currentConfig != null && currentConfig.PermanentDeath &&
+                Player.Local != null && Player.Local.Health != null && !Player.Local.Health.IsAlive &&
+                Singleton<DeathScreen>.Instance != null && Singleton<DeathScreen>.Instance.isOpen)
+                BeginPermanentDeathCleanup();
+        }
+
+        public static void BeginPermanentDeathCleanup()
+        {
+            if (deathCleanupStarted) return;
+            deathCleanupStarted = true;
+
+            LoadManager manager = Singleton<LoadManager>.Instance;
+            if (manager == null) return;
+
+            if (currentConfig == null || !currentConfig.PermanentDeath || !isQueuedForDeath ||
+                Player.Local == null || Player.Local.Health == null || Player.Local.Health.IsAlive ||
+                Player.PlayerList.Count != 1)
+            {
+                manager.ExitToMenu(null, null, false);
                 return;
             }
-            else
+
+            SaveInfo currentInfo = manager.ActiveSaveInfo;
+            if (currentInfo == null || string.IsNullOrWhiteSpace(currentInfo.SavePath))
             {
-                MelonCoroutines.Start(ReturnAndDeleteSave(currentInfo));
+                MelonLogger.Error("Flatline: active save path unavailable; returning to menu without deleting anything.");
+                manager.ExitToMenu(null, null, false);
+                return;
             }
+
+            MelonCoroutines.Start(ReturnAndDeleteSave(currentInfo));
         }
 
         public static IEnumerator ReturnAndDeleteSave(SaveInfo info)
         {
-            string path = info.SavePath;
+            if (!TryGetActiveSaveFolder(info.SavePath, info.SaveSlotNumber, out string path))
+            {
+                MelonLogger.Error("Flatline: refusing to delete an unrecognized save path.");
+                Singleton<LoadManager>.Instance.ExitToMenu(null, null, false);
+                yield break;
+            }
+
             string orgName = info.OrganisationName;
             int slotNum = info.SaveSlotNumber;
 
             Singleton<LoadManager>.Instance.ExitToMenu(null, null, false);
-#if MONO
-            WaitUntil isLoading = new WaitUntil(() => Singleton<LoadManager>.Instance.IsLoading);
-            WaitUntil inMenu = new WaitUntil(() => SceneManager.GetActiveScene().name == "Menu");
-            WaitUntil notLoading = new WaitUntil(() => !Singleton<LoadManager>.Instance.IsLoading);
+#if IL2CPP
+            string menuSceneName = SaveManager.MENU_SCENE_NAME;
 #else
-            WaitUntil isLoading = new WaitUntil((Il2CppSystem.Func<bool>)(() => Singleton<LoadManager>.Instance.IsLoading));
-            WaitUntil inMenu = new WaitUntil((Il2CppSystem.Func<bool>)(() => SceneManager.GetActiveScene().name == "Menu"));
-            WaitUntil notLoading = new WaitUntil((Il2CppSystem.Func<bool>)(() => !Singleton<LoadManager>.Instance.IsLoading));
+            string menuSceneName = "Menu";
 #endif
-            yield return isLoading;
-            yield return inMenu;
-            yield return notLoading;
+            float deadline = Time.realtimeSinceStartup + 30f;
+            bool menuReady = false;
+            yield return null; // Let the game begin the transition before checking the scene.
+            while (Time.realtimeSinceStartup < deadline)
+            {
+                LoadManager manager = Singleton<LoadManager>.Instance;
+                if (SceneManager.GetActiveScene().name == menuSceneName && (manager == null || !manager.IsLoading))
+                {
+                    menuReady = true;
+                    break;
+                }
+                yield return null;
+            }
+            if (!menuReady)
+            {
+                MelonLogger.Error("Flatline: menu did not finish loading; save deletion cancelled.");
+                yield break;
+            }
 
-            yield return Wait1;
+            // Give any save-on-exit callback time to finish writing before deletion.
+            yield return new WaitForSecondsRealtime(1f);
+            LoadManager loadManager = Singleton<LoadManager>.Instance;
+            if (SceneManager.GetActiveScene().name != menuSceneName || (loadManager != null && loadManager.IsLoading))
+            {
+                MelonLogger.Error("Flatline: menu state changed; save deletion cancelled.");
+                yield break;
+            }
 
             Log("Deleting save data...");
             try
             {
-                if (Directory.Exists(path))
+                if (TryGetActiveSaveFolder(path, slotNum, out string checkedPath))
                 {
-                    Directory.Delete(path, true);
+                    Directory.Delete(checkedPath, true);
                     Log("Save data deleted succesfully");
-                    Singleton<LoadManager>.Instance.RefreshSaveInfo();
+                    RemoveSaveAssociatedData(orgName, slotNum);
+                    if (Singleton<LoadManager>.Instance != null)
+                        Singleton<LoadManager>.Instance.RefreshSaveInfo();
                 }
                 else
                 {
-                    Log("Save data not found at path: " + path);
+                    MelonLogger.Error("Flatline: save path disappeared or is no longer safe; deletion cancelled.");
                 }
             } catch (Exception ex)
             {
-                Log("Failed to delete save data: " + ex);
+                MelonLogger.Error("Flatline: failed to delete save data: " + ex);
             }
 
-            Log("Deleting flatline persist data");
-            RemoveSaveAssociatedData(orgName, slotNum);
-
             yield break;
+        }
+
+        // SaveInfo.SavePath must be exactly Saves/<profile>/SaveGame_<slot>.
+        // Never delete a parent folder, another game folder, or a reparse point.
+        private static bool TryGetActiveSaveFolder(string savePath, int slotNumber, out string fullPath)
+        {
+            string root = Path.Combine(Application.persistentDataPath, "Saves");
+            return SaveFolderGuard.TryValidate(root, savePath, slotNumber, out fullPath);
         }
 
         #endregion

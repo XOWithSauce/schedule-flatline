@@ -58,7 +58,7 @@ namespace Flatline
         public const string Description = "";
         public const string Author = "XOWithSauce";
         public const string Company = null;
-        public const string Version = "1.0.2";
+        public const string Version = "1.0.2.48";
         public const string DownloadLink = "https://github.com/XOWithSauce/schedule-flatline";
     }
 
@@ -73,6 +73,18 @@ namespace Flatline
         public static bool isSaving = false;
         public static bool haltExecution = false;
         public static bool setupCompleted = false;
+
+        public static bool GameSleepInProgress
+        {
+            get
+            {
+#if MONO
+                return NetworkSingleton<TimeManager>.Instance != null && NetworkSingleton<TimeManager>.Instance.IsSleepInProgress;
+#else
+                return NetworkSingleton<SleepController>.Instance != null && NetworkSingleton<SleepController>.Instance.IsSleepInProgress;
+#endif
+            }
+        }
         #region await
         public static readonly WaitForEndOfFrame WaitFrame = new WaitForEndOfFrame();
         public static readonly WaitForSeconds Wait01 = new WaitForSeconds(0.1f);
@@ -140,7 +152,14 @@ namespace Flatline
         private void SetupMelonPreferences()
         {
             category = MelonPreferences.CreateCategory($"{BuildInfo.Name}_{BuildInfo.Author}", BuildInfo.Name);
-            PermanentDeath = category.CreateEntry("PermanentDeath", true,
+#if IL2CPP
+            // Death screen/save deletion is not yet compatible with 0.4.7;
+            // existing preferences remain untouched, but new installs opt out.
+            const bool permanentDeathDefault = false;
+#else
+            const bool permanentDeathDefault = true;
+#endif
+            PermanentDeath = category.CreateEntry("PermanentDeath", permanentDeathDefault,
                 display_name: "PermanentDeath",
                 description: "Permanent Death Enabled"
             );
@@ -265,7 +284,7 @@ namespace Flatline
 
         public override void OnUpdate()
         {
-            if (!registered || isSaving || haltExecution) return;
+            if (!registered || !setupCompleted || isSaving || haltExecution) return;
             UpdateConsumption();
         }
 
@@ -321,6 +340,12 @@ namespace Flatline
 #endif
             yield return timeManagerExists;
 
+#if IL2CPP
+            // SleepController owns the sleep events in 0.4.7. It can initialize
+            // later than TimeManager, so do not register listeners until it exists.
+            yield return new WaitUntil((Il2CppSystem.Func<bool>)(() => NetworkSingleton<SleepController>.Instance != null));
+#endif
+
             Log("Starting Setup");
             loadedPlayerData = ConfigLoader.LoadPlayerData();
             InitiateSurvivalSliders();
@@ -363,8 +388,8 @@ namespace Flatline
             instance.onHourPass += (Il2CppSystem.Action)FlatlinePlayer.OnHourPass;
             instance.onHourPass += (Il2CppSystem.Action)PlayerConsumeDamage.OnHourPass;
             instance.onHourPass += (Il2CppSystem.Action)PlayerDiseaseDamage.OnHourPass;
-            instance.onSleepEnd += (Il2CppSystem.Action)PlayerDiseaseDamage.OnSleepEnd;
-            instance.onSleepEnd += (Il2CppSystem.Action)FlatlinePlayer.OnSleepEnd;
+            NetworkSingleton<SleepController>.Instance.OnSleepEnd += (Il2CppSystem.Action)PlayerDiseaseDamage.OnSleepEnd;
+            NetworkSingleton<SleepController>.Instance.OnSleepEnd += (Il2CppSystem.Action)FlatlinePlayer.OnSleepEnd;
 #endif
             setupCompleted = true;
             Log("Setup finished");
@@ -377,6 +402,26 @@ namespace Flatline
         #region Harmony Patches for Saving and Coroutine safety
         static void ExitPreTask()
         {
+#if IL2CPP
+            if (setupCompleted)
+            {
+                var timeManager = NetworkSingleton<TimeManager>.Instance;
+                if (timeManager != null)
+                {
+                    timeManager.onMinutePass -= (Il2CppSystem.Action)FlatlinePlayer.OnMinPass;
+                    timeManager.onMinutePass -= (Il2CppSystem.Action)BedRotSimulator.MinPassBedrotting;
+                    timeManager.onHourPass -= (Il2CppSystem.Action)FlatlinePlayer.OnHourPass;
+                    timeManager.onHourPass -= (Il2CppSystem.Action)PlayerConsumeDamage.OnHourPass;
+                    timeManager.onHourPass -= (Il2CppSystem.Action)PlayerDiseaseDamage.OnHourPass;
+                }
+                var sleepController = NetworkSingleton<SleepController>.Instance;
+                if (sleepController != null)
+                {
+                    sleepController.OnSleepEnd -= (Il2CppSystem.Action)PlayerDiseaseDamage.OnSleepEnd;
+                    sleepController.OnSleepEnd -= (Il2CppSystem.Action)FlatlinePlayer.OnSleepEnd;
+                }
+            }
+#endif
             registered = false;
 
             foreach (object coro in coros)
@@ -431,13 +476,23 @@ namespace Flatline
         {
             public static bool Prefix(SaveManager __instance, string saveFolderPath)
             {
-                if (!isSaving)
+                if (setupCompleted && registered && loadedPlayerData != null && !isSaving)
                 {
                     isSaving = true;
-                    UpdateDiseaseData();
-                    ConfigLoader.Save(loadedPlayerData);
+                    try
+                    {
+                        UpdateDiseaseData();
+                        ConfigLoader.Save(loadedPlayerData);
+                    }
+                    catch (Exception ex)
+                    {
+                        MelonLogger.Error($"Flatline save failed; game save will continue: {ex}");
+                    }
+                    finally
+                    {
+                        isSaving = false;
+                    }
                 }
-                isSaving = false;
                 return true;
             }
         }
@@ -481,14 +536,17 @@ namespace Flatline
                 // if the permanent death is not enabled->  disable the custom button
                 if (!currentConfig.PermanentDeath)
                 {
-                    CustomButton.gameObject.SetActive(false);
+                    if (CustomButton != null)
+                        CustomButton.gameObject.SetActive(false);
                 }
                 // Else perma death enabled ->  disable the respawn/load buttons
                 else if (currentConfig.PermanentDeath)
                 {
-                    if (__instance.respawnButton.gameObject.activeSelf)
+                    if (CustomButton != null)
+                        CustomButton.gameObject.SetActive(true);
+                    if (__instance.respawnButton != null && __instance.respawnButton.gameObject.activeSelf)
                         __instance.respawnButton.gameObject.SetActive(false);
-                    if (__instance.loadSaveButton.gameObject.activeSelf)
+                    if (__instance.loadSaveButton != null && __instance.loadSaveButton.gameObject.activeSelf)
                         __instance.loadSaveButton.gameObject.SetActive(false);
                 }
                 return;

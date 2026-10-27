@@ -69,7 +69,7 @@ namespace Flatline
             if (!flatlinePlayerAudio.isPlaying)
             {
                 AudioClip clip = null;
-                if (Player.Local.Avatar.CurrentSettings.Gender > 0.5f)
+                if (GetGenderScalar() > 0.5f)
                 {
                     if (UnityEngine.Random.Range(0f, 1f) > 0.5f)
                         clip = loadedAudios["femalecough"];

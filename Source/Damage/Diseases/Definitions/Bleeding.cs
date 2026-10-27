@@ -80,7 +80,7 @@ namespace Flatline
 
                 if (haltExecution) continue;
 
-                if (isSaving || FlatlinePlayer.isPassedOut || NetworkSingleton<TimeManager>.Instance.IsSleepInProgress) continue;
+                if (isSaving || FlatlinePlayer.isPassedOut || GameSleepInProgress) continue;
 
                 if (FlatlinePlayer.isQueuedForDeath)
                     yield break;

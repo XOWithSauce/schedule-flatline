@@ -366,7 +366,7 @@ namespace Flatline
                 {
                     Log("Player lethally choked on food: " + ingestible.ItemID);
                     FlatlineUIModule.causeOfDeath = $"Choked on a {ingestible.ItemID}";
-                    if (Player.Local.Avatar.CurrentSettings.Gender > 0.5f)
+                    if (FlatlinePlayer.GetGenderScalar() > 0.5f)
                         FlatlinePlayer.flatlinePlayerAudio.PlayOneShot(ConfigLoader.loadedAudios["femalecough"]);
                     else
                         FlatlinePlayer.flatlinePlayerAudio.PlayOneShot(ConfigLoader.loadedAudios["malecough"]);

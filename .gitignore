@@ -1,0 +1,5 @@
+# Locally generated IL2CPP proxies and build artifacts are game-specific.
+**/bin/
+**/obj/
+IL2Cpp/libs-il2cpp/*.dll
+Mono/libs-mono/*.dll

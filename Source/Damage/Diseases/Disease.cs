@@ -50,7 +50,7 @@ namespace Flatline
                 yield return Wait10;
                 if (isQueuedForDeath && !currentConfig.PermanentDeath && Player.PlayerList.Count > 1) continue;
                 if (!registered || isQueuedForDeath) yield break;
-                if (isSaving || isPassedOut || NetworkSingleton<TimeManager>.Instance.IsSleepInProgress || haltExecution) continue;
+                if (isSaving || isPassedOut || GameSleepInProgress || haltExecution) continue;
                 if (Player.PlayerList.Count > 1 && !Player.Local.Health.IsAlive) continue;
                 if (NetworkSingleton<TimeManager>.Instance.CurrentTime < 659 && NetworkSingleton<TimeManager>.Instance.CurrentTime > 400) continue;
 
