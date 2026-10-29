@@ -22,10 +22,11 @@ using ScheduleOne.PlayerScripts;
 using ScheduleOne.Product;
 using ScheduleOne.UI;
 using ScheduleOne.GameTime;
+using ScheduleOne.Audio;
+using ScheduleOne.Core.Audio;
 #else
 using MelonLoader.Support;
 using Il2CppScheduleOne;
-using Il2CppScheduleOne.Core;
 using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.FX;
 using Il2CppScheduleOne.ItemFramework;
@@ -33,7 +34,10 @@ using Il2CppScheduleOne.PlayerScripts;
 using Il2CppScheduleOne.Product;
 using Il2CppScheduleOne.UI;
 using Il2CppScheduleOne.GameTime;
+using Il2CppScheduleOne.Audio;
+using Il2CppScheduleOne.Core.Audio;
 #endif
+
 namespace Flatline
 {
     public static class PlayerConsumeDamage
@@ -101,7 +105,7 @@ namespace Flatline
             audioObject.transform.parent = PlayerSingleton<PlayerCamera>.Instance.transform;
             audioObject.transform.localPosition = Vector3.zero;
             heartBeatSource = audioObject.AddComponent<AudioSource>();
-            heartBeatSource.volume = 0.7f;
+            heartBeatSource.volume = Singleton<AudioManager>.Instance.GetVolume(EAudioType.FX, true);
             heartBeatSource.loop = false;
             audioObject.SetActive(true);
             heartBeatSource.enabled = true;

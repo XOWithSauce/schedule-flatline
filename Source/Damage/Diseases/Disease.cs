@@ -50,7 +50,7 @@ namespace Flatline
                 yield return Wait10;
                 if (isQueuedForDeath && !currentConfig.PermanentDeath && Player.PlayerList.Count > 1) continue;
                 if (!registered || isQueuedForDeath) yield break;
-                if (isSaving || isPassedOut || GameSleepInProgress || haltExecution) continue;
+                if (isSaving || isPassedOut || NetworkSingleton<SleepController>.Instance.IsSleepInProgress || haltExecution) continue;
                 if (Player.PlayerList.Count > 1 && !Player.Local.Health.IsAlive) continue;
                 if (NetworkSingleton<TimeManager>.Instance.CurrentTime < 659 && NetworkSingleton<TimeManager>.Instance.CurrentTime > 400) continue;
 
@@ -63,7 +63,7 @@ namespace Flatline
                 if (hospitalChoiceInitialized)
                 {
                     UpdateChoiceState(lisaNPC, lisaCureChoices);
-                    UpdateChoiceState(ireneNPC, ireneCureChoices);
+                    UpdateChoiceState(jackNPC, jackCureChoices);
                 }
 
                 this.data.MinsSinceDiseaseStart += 10;
@@ -78,7 +78,7 @@ namespace Flatline
             if (hospitalChoiceInitialized)
             {
                 UpdateChoiceState(lisaNPC, lisaCureChoices);
-                UpdateChoiceState(ireneNPC, ireneCureChoices);
+                UpdateChoiceState(jackNPC, jackCureChoices);
             }
 
             this.diseaseCoroutine = null;

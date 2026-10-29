@@ -3,7 +3,6 @@ using HarmonyLib;
 using MelonLoader;
 using UnityEngine;
 
-using static Flatline.ConfigLoader;
 using static Flatline.DebugModule;
 using static Flatline.FlatlineUIModule;
 using static Flatline.FlatlineIngestibles;
@@ -16,6 +15,7 @@ using static Flatline.BedRotSimulator;
 using static Flatline.DepressionSimulator;
 using static Flatline.HospitalHealing;
 using static Flatline.PropertyTemperatureController;
+using static Flatline.EnergyEyelidManager;
 
 #if MONO
 using ScheduleOne.DevUtilities;
@@ -23,12 +23,14 @@ using ScheduleOne.GameTime;
 using ScheduleOne.Persistence;
 using ScheduleOne.UI.MainMenu;
 using ScheduleOne.UI;
+using ScheduleOne.PlayerScripts;
 #else
 using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.GameTime;
 using Il2CppScheduleOne.Persistence;
 using Il2CppScheduleOne.UI.MainMenu;
 using Il2CppScheduleOne.UI;
+using Il2CppScheduleOne.PlayerScripts;
 #endif
 
 [assembly: MelonInfo(typeof(Flatline.Flatline), Flatline.BuildInfo.Name, Flatline.BuildInfo.Version, Flatline.BuildInfo.Author, Flatline.BuildInfo.DownloadLink)]
@@ -58,7 +60,7 @@ namespace Flatline
         public const string Description = "";
         public const string Author = "XOWithSauce";
         public const string Company = null;
-        public const string Version = "1.0.2.48";
+        public const string Version = "1.0.3";
         public const string DownloadLink = "https://github.com/XOWithSauce/schedule-flatline";
     }
 
@@ -73,18 +75,6 @@ namespace Flatline
         public static bool isSaving = false;
         public static bool haltExecution = false;
         public static bool setupCompleted = false;
-
-        public static bool GameSleepInProgress
-        {
-            get
-            {
-#if MONO
-                return NetworkSingleton<TimeManager>.Instance != null && NetworkSingleton<TimeManager>.Instance.IsSleepInProgress;
-#else
-                return NetworkSingleton<SleepController>.Instance != null && NetworkSingleton<SleepController>.Instance.IsSleepInProgress;
-#endif
-            }
-        }
         #region await
         public static readonly WaitForEndOfFrame WaitFrame = new WaitForEndOfFrame();
         public static readonly WaitForSeconds Wait01 = new WaitForSeconds(0.1f);
@@ -152,14 +142,7 @@ namespace Flatline
         private void SetupMelonPreferences()
         {
             category = MelonPreferences.CreateCategory($"{BuildInfo.Name}_{BuildInfo.Author}", BuildInfo.Name);
-#if IL2CPP
-            // Death screen/save deletion is not yet compatible with 0.4.7;
-            // existing preferences remain untouched, but new installs opt out.
-            const bool permanentDeathDefault = false;
-#else
-            const bool permanentDeathDefault = true;
-#endif
-            PermanentDeath = category.CreateEntry("PermanentDeath", permanentDeathDefault,
+            PermanentDeath = category.CreateEntry("PermanentDeath", true,
                 display_name: "PermanentDeath",
                 description: "Permanent Death Enabled"
             );
@@ -268,8 +251,6 @@ namespace Flatline
 
             currentConfig = new();
             SetupMelonPreferences();
-            Log("Diseases enabled: " + DiseasesEnabled.Value);
-            Log("In config: " + currentConfig.DiseasesEnabled);
             // Load images instantiate sprites
             ConfigLoader.LoadModResources();
 
@@ -340,11 +321,12 @@ namespace Flatline
 #endif
             yield return timeManagerExists;
 
-#if IL2CPP
-            // SleepController owns the sleep events in 0.4.7. It can initialize
-            // later than TimeManager, so do not register listeners until it exists.
-            yield return new WaitUntil((Il2CppSystem.Func<bool>)(() => NetworkSingleton<SleepController>.Instance != null));
+#if MONO
+            WaitUntil sleepControllerExists = new WaitUntil(() => NetworkSingleton<SleepController>.Instance != null);
+#else
+            WaitUntil sleepControllerExists = new WaitUntil((Il2CppSystem.Func<bool>)(() => NetworkSingleton<SleepController>.Instance != null));
 #endif
+            yield return sleepControllerExists;
 
             Log("Starting Setup");
             loadedPlayerData = ConfigLoader.LoadPlayerData();
@@ -355,6 +337,7 @@ namespace Flatline
             InitiateDepressionSimulatorModule();
             yield return MelonCoroutines.Start(InitiateIngestibleModule());
             InitFlatlinePlayer();
+            CreateEyelidOverride();
             InitPlayerDiseaseDamage();
             InitConsumeDamageModule();
             InitHospitalHealing();
@@ -370,6 +353,8 @@ namespace Flatline
             coros.Add(MelonCoroutines.Start(UpdateDiseasesHolder()));
             coros.Add(MelonCoroutines.Start(LazyUpdatePlayerWarmBuilding()));
             coros.Add(MelonCoroutines.Start(UpdateAllPropertyTemperatures()));
+            coros.Add(MelonCoroutines.Start(UpdateEyelidEnergyState()));
+
             TimeManager instance = NetworkSingleton<TimeManager>.Instance;
 
             var action = (Action)FlatlinePlayer.OnMinPass;
@@ -380,8 +365,8 @@ namespace Flatline
             instance.onHourPass = (Action)Delegate.Combine(instance.onHourPass, new Action(FlatlinePlayer.OnHourPass));
             instance.onHourPass = (Action)Delegate.Combine(instance.onHourPass, new Action(PlayerConsumeDamage.OnHourPass));
             instance.onHourPass = (Action)Delegate.Combine(instance.onHourPass, new Action(PlayerDiseaseDamage.OnHourPass));
-            instance.onSleepEnd = (Action)Delegate.Combine(instance.onSleepEnd, new Action(PlayerDiseaseDamage.OnSleepEnd));
-            instance.onSleepEnd = (Action)Delegate.Combine(instance.onSleepEnd, new Action(FlatlinePlayer.OnSleepEnd));
+            NetworkSingleton<SleepController>.Instance.OnSleepEnd += PlayerDiseaseDamage.OnSleepEnd;
+            NetworkSingleton<SleepController>.Instance.OnSleepEnd += FlatlinePlayer.OnSleepEnd;
 #else
             instance.onMinutePass += (Il2CppSystem.Action)action;
             instance.onMinutePass += (Il2CppSystem.Action)bedrotAction;
@@ -402,26 +387,6 @@ namespace Flatline
         #region Harmony Patches for Saving and Coroutine safety
         static void ExitPreTask()
         {
-#if IL2CPP
-            if (setupCompleted)
-            {
-                var timeManager = NetworkSingleton<TimeManager>.Instance;
-                if (timeManager != null)
-                {
-                    timeManager.onMinutePass -= (Il2CppSystem.Action)FlatlinePlayer.OnMinPass;
-                    timeManager.onMinutePass -= (Il2CppSystem.Action)BedRotSimulator.MinPassBedrotting;
-                    timeManager.onHourPass -= (Il2CppSystem.Action)FlatlinePlayer.OnHourPass;
-                    timeManager.onHourPass -= (Il2CppSystem.Action)PlayerConsumeDamage.OnHourPass;
-                    timeManager.onHourPass -= (Il2CppSystem.Action)PlayerDiseaseDamage.OnHourPass;
-                }
-                var sleepController = NetworkSingleton<SleepController>.Instance;
-                if (sleepController != null)
-                {
-                    sleepController.OnSleepEnd -= (Il2CppSystem.Action)PlayerDiseaseDamage.OnSleepEnd;
-                    sleepController.OnSleepEnd -= (Il2CppSystem.Action)FlatlinePlayer.OnSleepEnd;
-                }
-            }
-#endif
             registered = false;
 
             foreach (object coro in coros)
@@ -458,6 +423,7 @@ namespace Flatline
 
             ResetFlatlineUIModule();
             ResetFlatlinePlayer();
+            ResetEyelidOverride();
             ResetIngestibleModule();
             ResetConsumeDamageModule();
             ResetBedRotModule();
@@ -532,22 +498,42 @@ namespace Flatline
             [HarmonyPostfix]
             public static void Postfix(DeathScreen __instance)
             {
+                Log("DeathScreen postfix");
                 if (currentConfig == null || !registered) return;
                 // if the permanent death is not enabled->  disable the custom button
+                // multiplayer -> respawn
+                // single -> load save
+                bool defaultButtonsExist = __instance.respawnButton != null && __instance.respawnButton.gameObject != null && __instance.loadSaveButton != null && __instance.loadSaveButton.gameObject != null;
                 if (!currentConfig.PermanentDeath)
                 {
-                    if (CustomButton != null)
+                    if (CustomButton != null && CustomButton.gameObject != null)
                         CustomButton.gameObject.SetActive(false);
+
+                    if (Player.PlayerList.Count > 1 && defaultButtonsExist)
+                    {
+                        __instance.respawnButton.gameObject.SetActive(true);
+                        __instance.loadSaveButton.gameObject.SetActive(false);
+
+                    }
+                    else if (defaultButtonsExist)
+                    {
+                        __instance.loadSaveButton.gameObject.SetActive(true);
+                        __instance.respawnButton.gameObject.SetActive(false);
+                    }
                 }
                 // Else perma death enabled ->  disable the respawn/load buttons
                 else if (currentConfig.PermanentDeath)
                 {
-                    if (CustomButton != null)
+                    Log("Perma death override");
+
+                    if (CustomButton != null && CustomButton.gameObject != null)
                         CustomButton.gameObject.SetActive(true);
-                    if (__instance.respawnButton != null && __instance.respawnButton.gameObject.activeSelf)
+
+                    if (defaultButtonsExist)
+                    {
                         __instance.respawnButton.gameObject.SetActive(false);
-                    if (__instance.loadSaveButton != null && __instance.loadSaveButton.gameObject.activeSelf)
                         __instance.loadSaveButton.gameObject.SetActive(false);
+                    }
                 }
                 return;
             }

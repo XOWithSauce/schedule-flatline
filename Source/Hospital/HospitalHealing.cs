@@ -15,7 +15,6 @@ using ScheduleOne.NPCs;
 using ScheduleOne.NPCs.CharacterClasses;
 using ScheduleOne.VoiceOver;
 using ScheduleOne.Map;
-
 #else
 using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.Dialogue;
@@ -32,11 +31,11 @@ namespace Flatline
     public static class HospitalHealing
     {
         public static Lisa lisaNPC;
-        public static Irene ireneNPC;
+        public static Jack jackNPC; //dr
 
         // diseaseID, created choice obj
         public static Dictionary<string, DialogueController.DialogueChoice> lisaCureChoices = new();
-        public static Dictionary<string, DialogueController.DialogueChoice> ireneCureChoices = new();
+        public static Dictionary<string, DialogueController.DialogueChoice> jackCureChoices = new();
 
         public static bool hospitalChoiceInitialized = false;
 
@@ -54,8 +53,8 @@ namespace Flatline
         public static void InitHospitalHealing()
         {
             lisaNPC = UnityEngine.Object.FindObjectOfType<Lisa>(true);
-            ireneNPC = UnityEngine.Object.FindObjectOfType<Irene>(true);
-            if (lisaNPC == null || ireneNPC == null)
+            jackNPC = UnityEngine.Object.FindObjectOfType<Jack>(true);
+            if (lisaNPC == null || jackNPC == null)
             {
                 Log("Failed to init hospital healing module");
                 return;
@@ -67,8 +66,8 @@ namespace Flatline
             {
                 DialogueController.DialogueChoice newChoiceLisa = AddDiseaseCureChoice(lisaNPC, kvp.Key);
                 lisaCureChoices.Add(kvp.Key, newChoiceLisa);
-                DialogueController.DialogueChoice newChoiceIrene = AddDiseaseCureChoice(ireneNPC, kvp.Key);
-                ireneCureChoices.Add(kvp.Key, newChoiceIrene);
+                DialogueController.DialogueChoice newChoiceJack = AddDiseaseCureChoice(jackNPC, kvp.Key);
+                jackCureChoices.Add(kvp.Key, newChoiceJack);
             }
             hospitalChoiceInitialized = true;
             return;
@@ -78,9 +77,9 @@ namespace Flatline
         {
             hospitalChoiceInitialized = false;
             lisaNPC = null;
-            ireneNPC = null;
+            jackNPC = null;
             lisaCureChoices.Clear();
-            ireneCureChoices.Clear();
+            jackCureChoices.Clear();
         }
 
         public static DialogueController.DialogueChoice AddDiseaseCureChoice(NPC npc, string diseaseID)
@@ -108,7 +107,7 @@ namespace Flatline
 
             if (Vector3.Distance(controller.npc.CenterPoint, hospitalDoorPoint) > 7f)
             {
-                controller.handler.WorldspaceRend.ShowText($"I'm off duty. Ask for the charge nurse at the hospital.", 10f);
+                controller.handler.WorldspaceRend.ShowText($"I'm off duty.", 10f);
                 controller.npc.PlayVO(EVOLineType.Annoyed, false);
                 yield break;
             }

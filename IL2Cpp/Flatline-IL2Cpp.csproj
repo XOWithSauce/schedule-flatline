@@ -1,4 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
+
 	<PropertyGroup>
 		<DefineConstants>$(DefineConstants);IL2CPP</DefineConstants>
 		<Configurations>Debug;Release;</Configurations>
@@ -16,7 +17,7 @@
 		<Optimize>true</Optimize>
 		<DefineConstants>$(DefineConstants);TRACE</DefineConstants>
 	</PropertyGroup>
-		
+	
 	<Target Name="PostBuild" AfterTargets="Build">
 		<Copy SourceFiles="$(TargetDir)$(TargetFileName)" DestinationFolder="C:\Program Files (x86)\Steam\steamapps\common\Schedule I\Mods\" OverwriteReadOnlyFiles="true" />
 	</Target>
@@ -28,8 +29,8 @@
 		<TargetFramework>net6.0</TargetFramework>
 
 		<AssemblyVersion>1.0.0.0</AssemblyVersion>
-		<FileVersion>1.0.2.48</FileVersion>
-		<Version>1.0.2.48</Version>
+		<FileVersion>1.0.3.0</FileVersion>
+		<Version>1.0.3</Version>
 		<Product>Flatline</Product>
 		<Company>XOWithSauce</Company>
 		<Copyright>Copyright XOWithSauce 2026 Source MIT</Copyright>
@@ -50,7 +51,7 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="LavaGang.MelonLoader" Version="0.7.1" />
+		<PackageReference Include="LavaGang.MelonLoader" Version="0.7.3" />
 		<PackageReference Include="Lib.Harmony" Version="2.4.2" />
 	</ItemGroup>
 
@@ -116,11 +117,12 @@
 		<Reference Include="UnityEngine.AudioModule">
 			<HintPath>libs-il2cpp\UnityEngine.AudioModule.dll</HintPath>
 		</Reference>
-		<Reference Include="Newtonsoft.Json">
-			<HintPath>libs-il2cpp\Newtonsoft.Json.dll</HintPath>
-		</Reference>
 		<Reference Include="Il2Cpp">
 			<HintPath>libs-il2cpp\Il2Cpp.dll</HintPath>
 		</Reference>
+		<Reference Include="Newtonsoft.Json">
+			<HintPath>libs-il2cpp\Newtonsoft.Json.dll</HintPath>
+		</Reference>
 	</ItemGroup>
+
 </Project>

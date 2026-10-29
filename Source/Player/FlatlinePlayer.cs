@@ -31,6 +31,9 @@ using ScheduleOne;
 using ScheduleOne.Money;
 using ScheduleOne.Map;
 using ScheduleOne.Persistence;
+using ScheduleOne.Core.Avatar;
+using ScheduleOne.Tools;
+using ScheduleOne.Vehicles;
 using FishNet;
 #else
 using Il2CppScheduleOne.Audio;
@@ -51,6 +54,9 @@ using Il2CppScheduleOne;
 using Il2CppScheduleOne.Money;
 using Il2CppScheduleOne.Map;
 using Il2CppScheduleOne.Persistence;
+using Il2CppScheduleOne.Core.Avatar;
+using Il2CppScheduleOne.Tools;
+using Il2CppScheduleOne.Vehicles;
 using Il2CppFishNet;
 #endif
 
@@ -94,44 +100,31 @@ namespace Flatline
         public static bool stateChanged = false;
 
         #region Clothing and temperature
-        public static readonly List<string> warmClothesPaths = new List<string>()
+        public static readonly List<string> warmClothesIds = new List<string>()
         {
-            "Avatar/Layers/Bottom/Jeans",
-            "Avatar/Layers/Top/Overalls",
-            "Avatar/Layers/Bottom/CargoPants",
-            "Avatar/Layers/Top/Buttonup",
-            "Avatar/Layers/Top/FlannelButtonUp",
-            "Avatar/Layers/Accessories/Gloves",
+            "jeans",
+            "overalls",
+            "cargopants",
 
-            "Avatar/Accessories/Chest/CollarJacket/CollarJacket",
-            "Avatar/Accessories/Chest/Blazer/Blazer",
-            "Avatar/Accessories/Feet/Sneakers/Sneakers",
-            "Avatar/Accessories/Feet/CombatBoots/CombatBoots",
-            "Avatar/Accessories/Feet/DressShoes/DressShoes",
-            "Avatar/Accessories/Head/Beanie/Beanie"
+            "leatherjacket",
+            "collarjacket",
+            "blazer",
+
+            "buttonupshirt",
+            "flannelbuttonupshirt",
+            "tshirttiedyeyellow",
+
+            "gloves",
+
+            "sneakers",
+            "combatboots",
+            "dressshoes",
+
+            "beanie"
         };
 
         public static readonly int maxBodyLayerClothes = 3;
         public static readonly int maxAccessoryLayerClothes = 3;
-
-        public static float GetGenderScalar()
-        {
-#if MONO
-            return Player.Local.Avatar.CurrentSettings.Gender;
-#else
-            return Player.Local.CurrentAppearance != null &&
-                Player.Local.CurrentAppearance.Gender == Il2CppScheduleOne.Core.Avatar.EGender.Female ? 1f : 0f;
-#endif
-        }
-
-        public static float GetWeightScalar()
-        {
-#if MONO
-            return Player.Local.Avatar.CurrentSettings.Weight;
-#else
-            return Player.Local.CurrentAppearance != null ? Player.Local.CurrentAppearance.Weight : 0.5f;
-#endif
-        }
 
         public static float OutsideTemperatureCelsius = 17f;
         public static float dayTempTarget = 20f;
@@ -165,7 +158,7 @@ namespace Flatline
             audioObject.transform.parent = Player.Local.transform.root;
             audioObject.transform.localPosition = Vector3.zero;
             flatlinePlayerAudio = audioObject.AddComponent<AudioSource>();
-            flatlinePlayerAudio.volume = 0.7f;
+            flatlinePlayerAudio.volume = Singleton<AudioManager>.Instance.GetVolume(EAudioType.FX, true);
             flatlinePlayerAudio.loop = false;
             audioObject.SetActive(true);
             flatlinePlayerAudio.enabled = true;
@@ -190,12 +183,12 @@ namespace Flatline
             }
 
             // add listener to update sfx volumes
-            // TODO: Fixme onVolumeSettingsChanged is of type PreallocatedAction with source showing cappacit on it, ensure not being over cappacit after adding listener and ensure casting works both mono il2cpp without issues
 #if MONO
-            //Singleton<AudioManager>.Instance.onVolumeSettingsChanged = (Action)Delegate.Combine(Singleton<AudioManager>.Instance.onVolumeSettingsChanged, new Action(OnAudioSettingsChanged));
+             Singleton<AudioManager>.Instance.onVolumeSettingsChanged.Add(OnAudioSettingsChanged);
 #else
             //Singleton<AudioManager>.Instance.onVolumeSettingsChanged += (Il2CppSystem.Action)OnAudioSettingsChanged;
 #endif
+
             Log("Finished init player");
         }
 
@@ -279,6 +272,11 @@ namespace Flatline
 
             flatlinePlayerAudio.PlayOneShot(loadedAudios["flatline"]);
 
+            FloatSmoother eyelid = Singleton<EyelidOverlay>.Instance.OpenMultiplier;
+            eyelid.SetSmoothingSpeed(0.4f);
+            eyelid.AddOverride(0f, 2, "flatline_eyelid");
+            eyelid.RemoveOverride("flatline_energy");
+
             float t = 0f;
             while (registered && current < duration)
             {
@@ -286,7 +284,7 @@ namespace Flatline
                 t = current / duration;
                 Singleton<PostProcessingManager>.Instance.SetBlur(t);
                 PlayerMovement.StaticMoveSpeedMultiplier = Mathf.Lerp(moveSpeed, 0f, t);
-                Singleton<EyelidOverlay>.Instance.CurrentOpen = Mathf.Lerp(1f, 0f, t);
+
                 if (!hasSetRagdolled && t > 0.1f && !(isFPRagdollActive || Player.Local.IsRagdolled))
                 {
                     hasSetRagdolled = true;
@@ -300,17 +298,12 @@ namespace Flatline
                 yield return null;
             }
 
-            Singleton<EyelidOverlay>.Instance.CurrentOpen = 0f;
             Singleton<PostProcessingManager>.Instance.SetBlur(1f);
             yield return Wait05;
             if (!registered) yield break;
 
             Player.Local.Health.SendDie();
             coros.Add(MelonCoroutines.Start(GenerateDeathScreenScore()));
-#if IL2CPP
-            if (currentConfig.PermanentDeath && Player.PlayerList.Count == 1)
-                MelonCoroutines.Start(FinishPermanentDeathAfterDelay());
-#endif
 
             // For when multiplayer perma ddeath is disabled then its just respawn script and remove the custom ragdoll + reset states
             if (Player.PlayerList.Count > 1 && !currentConfig.PermanentDeath)
@@ -335,6 +328,10 @@ namespace Flatline
                 loadedPlayerData.State.healthData.MaxHP = 100f;
                 loadedPlayerData.State.healthData.CurrentHP = 99f;
 
+                eyelid.RemoveOverride("flatline_eyelid");
+                eyelid.AddOverride(1f, 1, "flatline_energy");
+                eyelid.SetSmoothingSpeed(0.5f);
+
                 current = 0f;
                 t = 0f;
                 while (current < duration)
@@ -343,12 +340,9 @@ namespace Flatline
                     current += Time.deltaTime;
                     t = current / duration;
                     Singleton<PostProcessingManager>.Instance.SetBlur(Mathf.Lerp(1f, 0f, t));
-                    Singleton<EyelidOverlay>.Instance.CurrentOpen = t;
                     yield return null;
                 }
 
-                Singleton<EyelidOverlay>.Instance.CurrentOpen = 1f;
-                Singleton<EyelidOverlay>.Instance.AutoUpdate = true;
                 Singleton<PostProcessingManager>.Instance.SetBlur(0f);
                 PlayerMovement.StaticMoveSpeedMultiplier = moveSpeed;
                 if (hasSetRagdolled)
@@ -385,8 +379,6 @@ namespace Flatline
                 yield return waitObj;
             }
 
-            Singleton<EyelidOverlay>.Instance.AutoUpdate = false;
-
             bool shouldRob = false;
             if (Player.Local.CurrentProperty == null)
                 shouldRob = true;
@@ -413,6 +405,11 @@ namespace Flatline
 
             float moveSpeed = PlayerMovement.StaticMoveSpeedMultiplier;
 
+            FloatSmoother eyelid = Singleton<EyelidOverlay>.Instance.OpenMultiplier;
+            eyelid.SetSmoothingSpeed(0.4f);
+            eyelid.AddOverride(0f, 2, "flatline_eyelid");
+            eyelid.RemoveOverride("flatline_energy");
+
             float t = 0f;
             while (current < duration)
             {
@@ -421,23 +418,23 @@ namespace Flatline
                 t = current / duration;
                 Singleton<PostProcessingManager>.Instance.SetBlur(t);
                 PlayerMovement.StaticMoveSpeedMultiplier = Mathf.Lerp(1f, 0f, t);
-                if (t > 0.375f)
-                {
-                    Singleton<EyelidOverlay>.Instance.CurrentOpen = Mathf.Lerp(1f, 0f, t);
-                }
+
                 if (!hasSetRagdolled && t > 0.1f)
                 {
                     hasSetRagdolled = true;
                     Player.Local.IsUnconscious = true;
                     Singleton<GameInput>.Instance.ExitAll();
                     PlayerSingleton<PlayerInventory>.Instance.SetInventoryEnabled(false);
+                    Singleton<HUD>.Instance.SetCrosshairVisible(false);
+                    Singleton<HUD>.Instance.canvas.enabled = false;
                     coros.Add(MelonCoroutines.Start(FPRagdoll(shouldSleep, ShouldWake)));
                 }
                 yield return null;
             }
 
-            Singleton<EyelidOverlay>.Instance.CurrentOpen = 0f;
+
             Singleton<PostProcessingManager>.Instance.SetBlur(1f);
+
             if (!registered || isQueuedForDeath) yield break;
 
             if (shouldRob)
@@ -453,22 +450,14 @@ namespace Flatline
             
             if (shouldSleep)
             {
-#if MONO
-                NetworkSingleton<TimeManager>.Instance.StartSleep();
-#else
                 NetworkSingleton<SleepController>.Instance.StartSleep();
-#endif
             }
             else
             {
                 // Skip 3 hours only regen little bit energy
                 int passOutEndTime = TimeManager.AddMinutesTo24HourTime(NetworkSingleton<TimeManager>.Instance.CurrentTime, 60 * 3);
-#if MONO
-                NetworkSingleton<TimeManager>.Instance.SkipForwardToTime(passOutEndTime);
-#else
                 NetworkSingleton<TimeManager>.Instance.SkipToTimeAndSync(passOutEndTime);
-#endif
-                loadedPlayerData.State.Energy += 0.33f;
+                SetEnergy(Mathf.Clamp01(loadedPlayerData.State.Energy + 0.33f));
             }
 
             if (!shouldSleep)
@@ -480,9 +469,9 @@ namespace Flatline
             {
                 Log("Waiting until sleep ends to recover ragdoll...");
 #if MONO
-                WaitUntil waitObj = new WaitUntil(() => !registered || !GameSleepInProgress);
+                WaitUntil waitObj = new WaitUntil(() => !registered || !NetworkSingleton<SleepController>.Instance.IsSleepInProgress);
 #else
-                WaitUntil waitObj = new WaitUntil((Il2CppSystem.Func<bool>)(() => !registered || !GameSleepInProgress));
+                WaitUntil waitObj = new WaitUntil((Il2CppSystem.Func<bool>)(() => !registered || !NetworkSingleton<SleepController>.Instance.IsSleepInProgress));
 #endif
                 yield return waitObj;
                 yield return Wait5;
@@ -493,21 +482,25 @@ namespace Flatline
 
             current = 0f;
             t = 0f;
+
+            eyelid.RemoveOverride("flatline_eyelid");
+            eyelid.AddOverride(1f, 1, "flatline_energy");
+            eyelid.SetSmoothingSpeed(0.5f);
             while (current < duration)
             {
                 if (!registered || isQueuedForDeath) yield break;
                 current += Time.deltaTime;
                 t = current / duration;
                 Singleton<PostProcessingManager>.Instance.SetBlur(Mathf.Lerp(1f, 0f, t));
-                Singleton<EyelidOverlay>.Instance.CurrentOpen = t;
+
                 yield return null;
             }
 
-            Singleton<EyelidOverlay>.Instance.CurrentOpen = 1f;
-            Singleton<EyelidOverlay>.Instance.AutoUpdate = true;
             Singleton<PostProcessingManager>.Instance.SetBlur(0f);
             PlayerMovement.StaticMoveSpeedMultiplier = moveSpeed;
             PlayerSingleton<PlayerInventory>.Instance.SetInventoryEnabled(true);
+            Singleton<HUD>.Instance.canvas.enabled = true;
+            Singleton<HUD>.Instance.SetCrosshairVisible(true);
 
             Player.Local.IsUnconscious = false;
             isPassedOut = false;
@@ -550,7 +543,7 @@ namespace Flatline
 
         public static void OnMinPass()
         {
-            if (isSaving || !registered || isPassedOut || isQueuedForDeath || GameSleepInProgress || haltExecution) return;
+            if (isSaving || !registered || isPassedOut || isQueuedForDeath || NetworkSingleton<SleepController>.Instance.IsSleepInProgress || haltExecution) return;
             if (NetworkSingleton<TimeManager>.Instance.CurrentTime < 659 && NetworkSingleton<TimeManager>.Instance.CurrentTime > 400) return;
             if (Player.PlayerList.Count > 1 && !Player.Local.Health.IsAlive) return;
 
@@ -704,7 +697,7 @@ namespace Flatline
 
         public static void OnHourPass()
         {
-            if (isSaving || !registered || isPassedOut || isQueuedForDeath || GameSleepInProgress || haltExecution) return;
+            if (isSaving || !registered || isPassedOut || isQueuedForDeath || NetworkSingleton<SleepController>.Instance.IsSleepInProgress || haltExecution) return;
             if (NetworkSingleton<TimeManager>.Instance.CurrentTime < 659 && NetworkSingleton<TimeManager>.Instance.CurrentTime > 400) return;
             if (Player.PlayerList.Count > 1 && !Player.Local.Health.IsAlive) return;
 
@@ -831,7 +824,7 @@ namespace Flatline
                     yield break;
 
                 if (Player.PlayerList.Count > 1 && !Player.Local.Health.IsAlive) continue;
-                if (isSaving || GameSleepInProgress) continue;
+                if (isSaving || NetworkSingleton<SleepController>.Instance.IsSleepInProgress) continue;
 
                 if (PlayerSingleton<PlayerMovement>.Instance.IsSprinting)
                 {
@@ -874,6 +867,12 @@ namespace Flatline
             Quaternion origin1stRot = PlayerSingleton<PlayerCamera>.Instance.transform.localRotation;
             Transform parent = PlayerSingleton<PlayerCamera>.Instance.transform.parent;
 
+            if (Player.Local.CurrentVehicle != null)
+            {
+                Player.Local.CurrentVehicle.GetComponent<LandVehicle>().ExitVehicle();
+                Player.Local.SetVisible(true, false);
+            }
+
             PlayerSingleton<PlayerMovement>.Instance.IsSprinting = false;
             PlayerSingleton<PlayerMovement>.Instance.AddSprintBlocker("LegDamage");
 
@@ -899,15 +898,9 @@ namespace Flatline
             Rigidbody rb = visColl.AddComponent<Rigidbody>();
             rb.isKinematic = true;
 
-            // The 0.4.7 avatar no longer exposes HeadBone. Use the animator bone when available.
-#if MONO
-            Transform headBone = Player.Local.Avatar.HeadBone;
-#else
             Animator avatarAnimator = Player.Local.Avatar.GetComponentInChildren<Animator>();
-            Transform headBone = avatarAnimator != null && avatarAnimator.isHuman
-                ? avatarAnimator.GetBoneTransform(HumanBodyBones.Head) : null;
-            if (headBone == null) headBone = Player.Local.Avatar.MiddleSpine;
-#endif
+            Transform headBone = avatarAnimator.GetBoneTransform(HumanBodyBones.Head);
+
             visPos.transform.parent = headBone;
             visPos.transform.localScale = Vector3.one;
             visPos.transform.localRotation = Quaternion.identity;
@@ -961,13 +954,8 @@ namespace Flatline
             else
                 force = Player.Local.transform.root.transform.forward;
 
-#if MONO
-            Player.Local.Avatar.MiddleSpineRB.AddForce(force * 1.4f, ForceMode.VelocityChange);
-#else
-            Rigidbody spine = Player.Local.Avatar.MiddleSpine != null
-                ? Player.Local.Avatar.MiddleSpine.GetComponent<Rigidbody>() : null;
-            if (spine != null) spine.AddForce(force * 1.4f, ForceMode.VelocityChange);
-#endif
+            if (Player.Local.Avatar._activeRagdoll != null & Player.Local.Avatar._activeRagdoll._rootRigidbody != null)
+                Player.Local.Avatar._activeRagdoll._rootRigidbody.AddForce(force * 1.4f, ForceMode.VelocityChange);
 
             yield return Wait5;
             if (!registered) yield break;
@@ -993,9 +981,9 @@ namespace Flatline
             if (waitSleepEnd)
             {
 #if MONO
-                WaitUntil waitObj = new WaitUntil(() => !registered || !GameSleepInProgress);
+                WaitUntil waitObj = new WaitUntil(() => !registered || !NetworkSingleton<SleepController>.Instance.IsSleepInProgress);
 #else
-                WaitUntil waitObj = new WaitUntil((Il2CppSystem.Func<bool>)(() => !registered || !GameSleepInProgress));
+                WaitUntil waitObj = new WaitUntil((Il2CppSystem.Func<bool>)(() => !registered || !NetworkSingleton<SleepController>.Instance.IsSleepInProgress));
 #endif
                 yield return waitObj;
                 yield return Wait5;
@@ -1050,7 +1038,7 @@ namespace Flatline
                 if (!registered) yield break;
                 if (!Player.Local.Health.IsAlive) continue;
                 if (isQueuedForDeath) continue;
-                if (isSaving || GameSleepInProgress) continue;
+                if (isSaving || NetworkSingleton<SleepController>.Instance.IsSleepInProgress) continue;
                 if (haltExecution) continue;
 
                 if (!Mathf.Approximately(ThirstConsumptionPerMinute, DefaultThirstConsumption))
@@ -1082,53 +1070,19 @@ namespace Flatline
 
         public static float EvaluatePlayerClothing()
         {
-#if IL2CPP
-            // 0.4.7 replaced AvatarSettings layers with clothing item slots. Match
-            // the old warm-clothing names to equipped item IDs where possible.
-            if (Player.Local?.Clothing?.ItemSlots == null) return 0.33f;
-            int warmItems = 0;
-            foreach (var slot in Player.Local.Clothing.ItemSlots)
-            {
-                string id = slot?.ItemInstance?.Definition?.ID;
-                if (string.IsNullOrEmpty(id)) continue;
-                foreach (string path in warmClothesPaths)
-                {
-                    string clothingName = path.Substring(path.LastIndexOf('/') + 1);
-                    if (id.IndexOf(clothingName, StringComparison.OrdinalIgnoreCase) < 0) continue;
-                    warmItems++;
-                    break;
-                }
-            }
-            return Mathf.Clamp01((float)warmItems / 6f);
-#else
             int foundBody = 0;
-            int foundAcc = 0;
-            foreach (var setting in Player.Local.Avatar.CurrentSettings.BodyLayerSettings)
+            foreach (AvatarObject obj in Player.Local.Avatar.Appearance._wornObjects)
             {
                 if (foundBody == maxBodyLayerClothes)
                     break;
 
-                if (warmClothesPaths.Contains(setting.layerPath))
+                if (warmClothesIds.Contains(obj.Id.ToLower()))
                 {
                     foundBody++;
                     continue;
                 }
             }
-
-            foreach (var setting in Player.Local.Avatar.CurrentSettings.AccessorySettings)
-            {
-                if (foundAcc == maxBodyLayerClothes)
-                    break;
-
-                if (warmClothesPaths.Contains(setting.path))
-                {
-                    foundAcc++;
-                    continue;
-                }
-            }
-
-            return (float)(foundAcc + foundBody) / 6f;
-#endif
+            return (float)(foundBody) / 6f;
         }
 
         public static void AppendDamageSource(string source)
@@ -1156,7 +1110,7 @@ namespace Flatline
                 if (isQueuedForDeath && currentConfig.PermanentDeath) yield break;
 
                 if (!currentConfig.TemperatureRequired) continue;
-                if (isPassedOut || GameSleepInProgress || haltExecution) continue;
+                if (isPassedOut || NetworkSingleton<SleepController>.Instance.IsSleepInProgress || haltExecution) continue;
 
                 if (Player.Local.CurrentProperty != null || Player.Local.CurrentBusiness != null) continue;
 
@@ -1172,6 +1126,10 @@ namespace Flatline
                         {
                             if (enumerator.Current.WithinEnclosure(Player.Local.CenterPointTransform.position, Vector3.zero, out float _, out float _))
                             {
+                                Log($"Detected enclosure obj: {enumerator.Current.transform.GetScenePath()}");
+                                if (enumerator.Current._enclosures != null)
+                                    Log($"Enclosures array count: {enumerator.Current._enclosures.Count}");
+
                                 inWeatherEclosure = true;
                                 break;
                             }
@@ -1215,7 +1173,7 @@ namespace Flatline
                                 insideWarmBuilding = true;
                                 string presence = distToP < 5f ? "near" : "";
                                 presence += IsPointInsideBox(Player.Local.CenterPointTransform.position, bc) ? "+in box" : "";
-                                Log($"Detected player presence in a warm building " + presence);
+                                Log($"Detected player presence in a warm building CUSTOM " + presence);
                                 foundBuilding = true;
                                 break;
                             }
@@ -1240,7 +1198,6 @@ namespace Flatline
         public static void OnAudioSettingsChanged()
         {
             float sfxScaledVolume = Singleton<AudioManager>.Instance.GetVolume(EAudioType.FX, true);
-            Log("Changing volume " + sfxScaledVolume);
             if (FlatlinePlayer.flatlinePlayerAudio != null)
                 FlatlinePlayer.flatlinePlayerAudio.volume = sfxScaledVolume;
 

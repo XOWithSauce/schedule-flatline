@@ -19,6 +19,8 @@ using ScheduleOne.Product;
 using ScheduleOne.UI;
 using ScheduleOne.Property;
 using ScheduleOne.Interaction;
+using ScheduleOne.Audio;
+using ScheduleOne.Core.Audio;
 #else
 using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.Equipping;
@@ -28,6 +30,8 @@ using Il2CppScheduleOne.Product;
 using Il2CppScheduleOne.UI;
 using Il2CppScheduleOne.Property;
 using Il2CppScheduleOne.Interaction;
+using Il2CppScheduleOne.Audio;
+using Il2CppScheduleOne.Core.Audio;
 #endif
 
 namespace Flatline
@@ -181,7 +185,7 @@ namespace Flatline
             ingestorAudio = eatSound.AddComponent<AudioSource>();
             ingestorAudio.loop = false;
             ingestorAudio.playOnAwake = false;
-            ingestorAudio.volume = 0.7f;
+            ingestorAudio.volume = Singleton<AudioManager>.Instance.GetVolume(EAudioType.FX, true);
             eatSound.SetActive(true);
             Log("IngestorAudio made");
             //tap for water drinking
@@ -366,7 +370,7 @@ namespace Flatline
                 {
                     Log("Player lethally choked on food: " + ingestible.ItemID);
                     FlatlineUIModule.causeOfDeath = $"Choked on a {ingestible.ItemID}";
-                    if (FlatlinePlayer.GetGenderScalar() > 0.5f)
+                    if (Player.Local.Avatar.Appearance.AppliedNakedAppearance.Gender > 0.5f)
                         FlatlinePlayer.flatlinePlayerAudio.PlayOneShot(ConfigLoader.loadedAudios["femalecough"]);
                     else
                         FlatlinePlayer.flatlinePlayerAudio.PlayOneShot(ConfigLoader.loadedAudios["malecough"]);

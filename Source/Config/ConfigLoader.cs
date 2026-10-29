@@ -428,23 +428,25 @@ namespace Flatline
         #region Helper function
         public static string SanitizeAndFormatName(string orgName)
         {
-            string saveFileName = orgName;
-
-            if (saveFileName != null)
+            if (orgName == null || string.IsNullOrWhiteSpace(orgName))
             {
-                saveFileName = saveFileName.Replace(" ", "_").ToLower();
-                saveFileName = saveFileName.Replace(",", "");
-                saveFileName = saveFileName.Replace(".", "");
-                saveFileName = saveFileName.Replace("<", "");
-                saveFileName = saveFileName.Replace(">", "");
-                saveFileName = saveFileName.Replace(":", "");
-                saveFileName = saveFileName.Replace("\"", "");
-                saveFileName = saveFileName.Replace("/", "");
-                saveFileName = saveFileName.Replace("\\", "");
-                saveFileName = saveFileName.Replace("|", "");
-                saveFileName = saveFileName.Replace("?", "");
-                saveFileName = saveFileName.Replace("*", "");
+                DebugModule.Log("Invalid organization name provided");
+                return "";
             }
+
+            string saveFileName = orgName;
+            saveFileName = saveFileName.Replace(" ", "_").ToLower();
+            saveFileName = saveFileName.Replace(",", "");
+            saveFileName = saveFileName.Replace(".", "");
+            saveFileName = saveFileName.Replace("<", "");
+            saveFileName = saveFileName.Replace(">", "");
+            saveFileName = saveFileName.Replace(":", "");
+            saveFileName = saveFileName.Replace("\"", "");
+            saveFileName = saveFileName.Replace("/", "");
+            saveFileName = saveFileName.Replace("\\", "");
+            saveFileName = saveFileName.Replace("|", "");
+            saveFileName = saveFileName.Replace("?", "");
+            saveFileName = saveFileName.Replace("*", "");
             saveFileName = saveFileName + ".json";
             return saveFileName;
         }

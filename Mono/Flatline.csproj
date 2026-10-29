@@ -1,4 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
+
 	<PropertyGroup>
 		<DefineConstants>$(DefineConstants);MONO</DefineConstants>
 		<Configurations>Debug;Release;</Configurations>
@@ -28,8 +29,8 @@
 		<TargetFramework>net48</TargetFramework>
 
 		<AssemblyVersion>1.0.0.0</AssemblyVersion>
-		<FileVersion>1.0.2.0</FileVersion>
-		<Version>1.0.2</Version>
+		<FileVersion>1.0.3.0</FileVersion>
+		<Version>1.0.3</Version>
 		<Product>Flatline</Product>
 		<Company>XOWithSauce</Company>
 		<Copyright>Copyright XOWithSauce 2026 Source MIT</Copyright>
@@ -51,7 +52,7 @@
 
 	<ItemGroup>
 		<PackageReference Include="BepInEx.AssemblyPublicizer.MSBuild" Version="0.4.3" PrivateAssets="all" />
-		<PackageReference Include="LavaGang.MelonLoader" Version="0.7.1" />
+		<PackageReference Include="LavaGang.MelonLoader" Version="0.7.3" />
 		<PackageReference Include="Lib.Harmony" Version="2.4.2" />
 	</ItemGroup>
 
@@ -63,7 +64,7 @@
 		<Reference Include="Assembly-CSharp" Publicize="true">
 			<HintPath>libs-mono\Assembly-CSharp.dll</HintPath>
 		</Reference>
-		<Reference Include="ScheduleOne.Core">
+		<Reference Include="ScheduleOne.Core" Publicize="true">
 			<HintPath>libs-mono\ScheduleOne.Core.dll</HintPath>
 		</Reference>
 		<Reference Include="FishNet.Runtime">
@@ -115,4 +116,5 @@
 			<HintPath>libs-mono\Newtonsoft.Json.dll</HintPath>
 		</Reference>
 	</ItemGroup>
+
 </Project>

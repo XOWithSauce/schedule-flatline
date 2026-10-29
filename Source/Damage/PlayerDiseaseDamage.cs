@@ -27,7 +27,6 @@ using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.GameTime;
 using Il2CppScheduleOne.Map;
 using Il2CppScheduleOne.Interaction;
-using Il2CppScheduleOne.Weather;
 #endif
 
 namespace Flatline
@@ -210,7 +209,7 @@ namespace Flatline
         public static void OnHourPass()
         {
             if (haltExecution) return;
-            if (GameSleepInProgress) return;
+            if (NetworkSingleton<SleepController>.Instance.IsSleepInProgress) return;
             if (NetworkSingleton<TimeManager>.Instance.CurrentTime < 659 && NetworkSingleton<TimeManager>.Instance.CurrentTime > 400) return;
             CalculateFeverProbability();
         }
@@ -279,7 +278,7 @@ namespace Flatline
             if (NetworkSingleton<MoneyManager>.Instance.cashBalance < 5000f)
                 stateTotal += 0.002f;
 
-            float gender = FlatlinePlayer.GetGenderScalar();
+            float gender = Player.Local.Avatar.Appearance.AppliedNakedAppearance.Gender;
             float genderAdjustedProbability = 0f;
             if (gender > 0.5f)
                 genderAdjustedProbability = UnityEngine.Random.Range(0.005f, 0.007f);
@@ -366,7 +365,7 @@ namespace Flatline
             else if (fallDamage > 38f)
                 probability += 0.75f;
 
-            float weight = FlatlinePlayer.GetWeightScalar();
+            float weight = Player.Local.Avatar.Appearance.AppliedNakedAppearance.Weight;
             if (weight <= 0.25f)
                 probability += 0.005f;
             else if (weight > 0.25f && weight <= 0.40f)
@@ -583,7 +582,7 @@ namespace Flatline
 
         public static void CalculateCancerProbability()
         {
-            float gender = FlatlinePlayer.GetGenderScalar();
+            float gender = Player.Local.Avatar.Appearance.AppliedNakedAppearance.Gender;
             float daysElapsed = (float)NetworkSingleton<TimeManager>.Instance.ElapsedDays;
 
             if (daysElapsed < 4) return;
@@ -630,7 +629,7 @@ namespace Flatline
             float maxHpLostNorm = Mathf.Lerp(1f, 0f, Mathf.Clamp01(loadedPlayerData.State.healthData.MaxHP / 100f));
             float predisposition = loadedPlayerData.State.healthData.Predisposition;
             float gluttony = loadedPlayerData.State.healthData.Gluttony;
-            float weight = FlatlinePlayer.GetWeightScalar();
+            float weight = Player.Local.Avatar.Appearance.AppliedNakedAppearance.Weight;
 
             int maxSmokingYears = UnityEngine.Random.Range(5, 15);
             int packsPerYearMax = 30;
